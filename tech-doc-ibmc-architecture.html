@@ -1,0 +1,2748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TechDocGen by IBMC - Architecture | System Overview</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-dark: #0a1628;
+            --primary-blue: #122a4d;
+            --accent-blue: #1e3a5f;
+            --highlight-blue: #2d5a87;
+            --gold-primary: #d4a574;
+            --gold-bright: #f0c675;
+            --gold-pale: #ffd700;
+            --yellow-accent: #ffb800;
+            --yellow-soft: #ffe066;
+            --text-light: #f5f5f5;
+            --text-muted: #a0aec0;
+            --glass-bg: rgba(18, 42, 77, 0.6);
+            --glass-border: rgba(212, 165, 116, 0.2);
+            --glow-gold: rgba(212, 165, 116, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--primary-dark);
+            color: var(--text-light);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Background Effects */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse 80% 50% at 20% 20%, rgba(30, 58, 95, 0.5) 0%, transparent 50%),
+                radial-gradient(ellipse 60% 40% at 80% 80%, rgba(212, 165, 116, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse 50% 30% at 50% 50%, rgba(45, 90, 135, 0.3) 0%, transparent 60%),
+                linear-gradient(180deg, var(--primary-dark) 0%, #0d1f35 50%, var(--primary-dark) 100%);
+            z-index: -2;
+        }
+
+        .grid-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(212, 165, 116, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(212, 165, 116, 0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+            z-index: -1;
+        }
+
+        .floating-orbs {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            animation: float 20s infinite ease-in-out;
+        }
+
+        .orb-1 {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(212, 165, 116, 0.2) 0%, transparent 70%);
+            top: 10%;
+            right: 10%;
+            animation-delay: 0s;
+        }
+
+        .orb-2 {
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(30, 58, 95, 0.4) 0%, transparent 70%);
+            bottom: 20%;
+            left: 5%;
+            animation-delay: -7s;
+        }
+
+        .orb-3 {
+            width: 250px;
+            height: 250px;
+            background: radial-gradient(circle, rgba(255, 184, 0, 0.15) 0%, transparent 70%);
+            top: 50%;
+            left: 50%;
+            animation-delay: -14s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(30px, -30px) scale(1.05); }
+            50% { transform: translate(-20px, 20px) scale(0.95); }
+            75% { transform: translate(20px, 30px) scale(1.02); }
+        }
+
+        /* Header */
+        header {
+            padding: 2rem 4rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--gold-primary) 0%, var(--gold-bright) 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: var(--primary-dark);
+            box-shadow: 0 4px 20px var(--glow-gold);
+        }
+
+        .logo-text {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.5rem;
+            font-weight: 600;
+            background: linear-gradient(90deg, var(--text-light), var(--gold-bright));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        nav {
+            display: flex;
+            gap: 2.5rem;
+        }
+
+        nav a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9rem;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        nav a::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--gold-primary);
+            transition: width 0.3s ease;
+        }
+
+        nav a:hover {
+            color: var(--gold-bright);
+        }
+
+        nav a:hover::after {
+            width: 100%;
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 4rem 4rem 6rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1.2rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 50px;
+            font-size: 0.8rem;
+            color: var(--gold-bright);
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        .hero-badge::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: var(--gold-bright);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        .hero h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 4.5rem;
+            font-weight: 700;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            animation: fadeInUp 0.8s ease-out 0.1s both;
+        }
+
+        .hero h1 span {
+            background: linear-gradient(135deg, var(--gold-primary) 0%, var(--gold-bright) 50%, var(--yellow-accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            max-width: 700px;
+            margin: 0 auto 2.5rem;
+            line-height: 1.8;
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }
+
+        .hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 4rem;
+            animation: fadeInUp 0.8s ease-out 0.3s both;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--gold-bright);
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Main Content */
+        main {
+            padding: 0 4rem 6rem;
+        }
+
+        /* Section Styles */
+        section {
+            margin-bottom: 6rem;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 3rem;
+        }
+
+        .section-number {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--gold-primary);
+            padding: 0.4rem 0.8rem;
+            background: rgba(212, 165, 116, 0.1);
+            border: 1px solid var(--glass-border);
+            border-radius: 4px;
+        }
+
+        .section-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.2rem;
+            font-weight: 600;
+        }
+
+        .section-line {
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, var(--glass-border), transparent);
+        }
+
+        /* Architecture Diagram */
+        .architecture-diagram {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 3rem;
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .architecture-diagram::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--gold-primary), transparent);
+        }
+
+        .arch-layers {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .arch-layer {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .layer-label {
+            width: 180px;
+            flex-shrink: 0;
+            text-align: right;
+            padding-right: 1.5rem;
+            border-right: 2px solid var(--highlight-blue);
+        }
+
+        .layer-label h3 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--gold-bright);
+            margin-bottom: 0.3rem;
+        }
+
+        .layer-label p {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .layer-content {
+            flex: 1;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .arch-box {
+            padding: 1rem 1.5rem;
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--primary-blue) 100%);
+            border: 1px solid var(--highlight-blue);
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .arch-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--gold-primary) 0%, var(--yellow-accent) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .arch-box:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(212, 165, 116, 0.2);
+            border-color: var(--gold-primary);
+        }
+
+        .arch-box:hover::before {
+            opacity: 0.1;
+        }
+
+        .arch-box.highlight {
+            background: linear-gradient(135deg, var(--gold-primary) 0%, var(--yellow-accent) 100%);
+            color: var(--primary-dark);
+            border-color: var(--gold-bright);
+        }
+
+        .arch-box span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .connector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem 0;
+        }
+
+        .connector-line {
+            width: 2px;
+            height: 40px;
+            background: linear-gradient(180deg, var(--highlight-blue), var(--gold-primary));
+            position: relative;
+        }
+
+        .connector-line::after {
+            content: '';
+            position: absolute;
+            bottom: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 8px solid var(--gold-primary);
+        }
+
+        /* Components Grid */
+        .components-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .component-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .component-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--gold-primary), var(--yellow-accent), var(--gold-bright));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .component-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--gold-primary);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+        }
+
+        .component-card:hover::before {
+            opacity: 1;
+        }
+
+        .component-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--highlight-blue) 100%);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            border: 1px solid var(--highlight-blue);
+        }
+
+        .component-card:hover .component-icon {
+            background: linear-gradient(135deg, var(--gold-primary) 0%, var(--yellow-accent) 100%);
+            border-color: var(--gold-bright);
+        }
+
+        .component-card h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .component-card .subtitle {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--gold-primary);
+            margin-bottom: 1rem;
+        }
+
+        .component-card p {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            line-height: 1.7;
+            margin-bottom: 1.5rem;
+        }
+
+        .component-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .tag {
+            font-size: 0.7rem;
+            padding: 0.3rem 0.7rem;
+            background: rgba(212, 165, 116, 0.1);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        /* Data Flow */
+        .data-flow {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 3rem;
+            backdrop-filter: blur(20px);
+        }
+
+        .flow-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .flow-step {
+            display: flex;
+            gap: 2rem;
+            position: relative;
+        }
+
+        .flow-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 24px;
+            top: 60px;
+            width: 2px;
+            height: calc(100% - 20px);
+            background: linear-gradient(180deg, var(--gold-primary), var(--highlight-blue));
+        }
+
+        .step-number {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--gold-primary) 0%, var(--yellow-accent) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Playfair Display', serif;
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: var(--primary-dark);
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .step-content {
+            flex: 1;
+            padding-bottom: 2.5rem;
+        }
+
+        .step-content h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .step-content p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+        }
+
+        .step-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .step-item {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            padding: 0.4rem 0.8rem;
+            background: var(--accent-blue);
+            border: 1px solid var(--highlight-blue);
+            border-radius: 6px;
+            color: var(--gold-bright);
+        }
+
+        /* Tech Stack */
+        .tech-stack {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+        }
+
+        .tech-category {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+        }
+
+        .tech-category h3 {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--gold-bright);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .tech-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .tech-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.9rem;
+        }
+
+        .tech-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--gold-primary);
+            border-radius: 50%;
+        }
+
+        /* Design Patterns */
+        .patterns-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1rem;
+        }
+
+        .pattern-card {
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--primary-blue) 100%);
+            border: 1px solid var(--highlight-blue);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .pattern-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--gold-primary);
+            box-shadow: 0 15px 40px rgba(212, 165, 116, 0.15);
+        }
+
+        .pattern-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .pattern-card h4 {
+            font-size: 0.95rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .pattern-card p {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Footer */
+        footer {
+            padding: 3rem 4rem;
+            border-top: 1px solid var(--glass-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-left {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .footer-logo {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.2rem;
+            color: var(--gold-bright);
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .footer-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: color 0.3s ease;
+        }
+
+        .footer-links a:hover {
+            color: var(--gold-bright);
+        }
+
+        .footer-right {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .tech-stack {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .patterns-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            header, main, .hero, footer {
+                padding-left: 1.5rem;
+                padding-right: 1.5rem;
+            }
+
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero-stats {
+                flex-direction: column;
+                gap: 2rem;
+            }
+
+            nav {
+                display: none;
+            }
+
+            .arch-layer {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .layer-label {
+                width: 100%;
+                text-align: left;
+                border-right: none;
+                border-bottom: 2px solid var(--highlight-blue);
+                padding-right: 0;
+                padding-bottom: 0.75rem;
+                margin-bottom: 1rem;
+            }
+
+            .tech-stack {
+                grid-template-columns: 1fr;
+            }
+
+            .patterns-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .components-grid {
+                grid-template-columns: 1fr;
+            }
+
+            footer {
+                flex-direction: column;
+                gap: 1.5rem;
+                text-align: center;
+            }
+
+            .footer-left {
+                flex-direction: column;
+            }
+        }
+
+        /* Animations on scroll */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease-out;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Architecture Building Blocks Styles */
+        .building-blocks-container {
+            display: flex;
+            flex-direction: column;
+            gap: 3rem;
+        }
+
+        .bdat-framework {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            backdrop-filter: blur(20px);
+        }
+
+        .bdat-header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .bdat-header h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .bdat-header p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .bdat-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .bdat-layer {
+            display: flex;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--primary-blue) 100%);
+            border: 1px solid var(--highlight-blue);
+            border-radius: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .bdat-layer:hover {
+            border-color: var(--gold-primary);
+            transform: translateX(5px);
+        }
+
+        .bdat-layer.business-layer { border-left: 4px solid var(--gold-bright); }
+        .bdat-layer.data-layer { border-left: 4px solid #4ecdc4; }
+        .bdat-layer.application-layer { border-left: 4px solid #ff6b6b; }
+        .bdat-layer.technology-layer { border-left: 4px solid #a855f7; }
+
+        .layer-icon-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .layer-icon {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+        }
+
+        .layer-info {
+            flex: 1;
+        }
+
+        .layer-info h4 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: var(--gold-bright);
+        }
+
+        .layer-items {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .layer-item {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.85rem;
+        }
+
+        .item-label {
+            min-width: 100px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .item-value {
+            color: var(--text-light);
+        }
+
+        /* Interaction Matrix */
+        .interaction-matrix {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            backdrop-filter: blur(20px);
+        }
+
+        .interaction-matrix h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.3rem;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .matrix-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .matrix-header, .matrix-row {
+            display: grid;
+            grid-template-columns: 100px repeat(6, 1fr);
+            gap: 2px;
+        }
+
+        .matrix-cell {
+            padding: 0.75rem;
+            text-align: center;
+            font-size: 0.8rem;
+            background: var(--accent-blue);
+            border-radius: 4px;
+        }
+
+        .matrix-cell.corner {
+            background: transparent;
+        }
+
+        .matrix-cell.header-cell {
+            background: var(--highlight-blue);
+            font-weight: 600;
+            color: var(--gold-bright);
+        }
+
+        .matrix-cell.row-header {
+            background: var(--highlight-blue);
+            font-weight: 600;
+            text-align: left;
+            color: var(--gold-bright);
+        }
+
+        .matrix-cell.active { color: var(--gold-bright); font-size: 1rem; }
+        .matrix-cell.passive { color: var(--text-muted); }
+        .matrix-cell.self { color: var(--yellow-accent); }
+        .matrix-cell.none { color: var(--text-muted); opacity: 0.5; }
+
+        .matrix-legend {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .legend-symbol.active { color: var(--gold-bright); }
+        .legend-symbol.passive { color: var(--text-muted); }
+        .legend-symbol.self { color: var(--yellow-accent); }
+        .legend-symbol.none { opacity: 0.5; }
+
+        /* Blocks Grid */
+        .blocks-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+
+        .block-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 1.5rem;
+            backdrop-filter: blur(20px);
+            transition: all 0.3s ease;
+        }
+
+        .block-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+        }
+
+        .block-card.interface-block { border-top: 3px solid var(--gold-bright); }
+        .block-card.processing-block { border-top: 3px solid #4ecdc4; }
+        .block-card.intelligence-block { border-top: 3px solid #ff6b6b; }
+        .block-card.output-block { border-top: 3px solid #a855f7; }
+
+        .block-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .block-type {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+        }
+
+        .block-badge {
+            font-size: 0.65rem;
+            padding: 0.25rem 0.6rem;
+            background: rgba(212, 165, 116, 0.2);
+            border: 1px solid var(--gold-primary);
+            border-radius: 20px;
+            color: var(--gold-bright);
+        }
+
+        .block-card h4 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.1rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .block-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .block-item {
+            display: flex;
+            gap: 1rem;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+        }
+
+        .block-icon {
+            font-size: 1.3rem;
+        }
+
+        .block-details strong {
+            display: block;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .block-details p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* Process Flow Diagram Styles */
+        .process-flow-container {
+            display: flex;
+            flex-direction: column;
+            gap: 3rem;
+        }
+
+        .flow-diagram {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            backdrop-filter: blur(20px);
+        }
+
+        .flow-title {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .flow-title h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .flow-title p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .flow-canvas {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .flow-node {
+            position: relative;
+        }
+
+        .node-shape {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--primary-blue) 100%);
+            border: 2px solid var(--highlight-blue);
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .node-shape:hover {
+            border-color: var(--gold-primary);
+            box-shadow: 0 5px 20px rgba(212, 165, 116, 0.2);
+        }
+
+        .node-shape.start, .node-shape.end {
+            background: linear-gradient(135deg, var(--gold-primary) 0%, var(--yellow-accent) 100%);
+            color: var(--primary-dark);
+            border-radius: 30px;
+            padding: 0.75rem 2rem;
+            font-weight: 700;
+            border: none;
+        }
+
+        .node-shape.diamond {
+            background: linear-gradient(135deg, var(--highlight-blue) 0%, var(--accent-blue) 100%);
+            transform: rotate(0deg);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+        }
+
+        .node-shape.diamond.small {
+            padding: 0.75rem 1.25rem;
+            font-size: 0.8rem;
+        }
+
+        .node-shape.process.highlight {
+            background: linear-gradient(135deg, rgba(212, 165, 116, 0.3) 0%, rgba(255, 184, 0, 0.2) 100%);
+            border-color: var(--gold-primary);
+        }
+
+        .node-shape.small {
+            padding: 0.6rem 1rem;
+            font-size: 0.8rem;
+        }
+
+        .node-shape.data {
+            background: linear-gradient(135deg, rgba(78, 205, 196, 0.3) 0%, rgba(78, 205, 196, 0.1) 100%);
+            border-color: #4ecdc4;
+        }
+
+        .node-icon {
+            font-size: 1.1rem;
+        }
+
+        .node-output {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--gold-primary);
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+
+        .flow-arrow {
+            position: relative;
+        }
+
+        .flow-arrow.vertical {
+            width: 2px;
+            height: 30px;
+            background: linear-gradient(180deg, var(--highlight-blue), var(--gold-primary));
+        }
+
+        .flow-arrow.vertical::after {
+            content: '';
+            position: absolute;
+            bottom: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 8px solid var(--gold-primary);
+        }
+
+        .flow-arrow.vertical.small {
+            height: 20px;
+        }
+
+        .flow-arrow.horizontal {
+            width: 30px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--highlight-blue), var(--gold-primary));
+        }
+
+        .flow-arrow.horizontal::after {
+            content: '';
+            position: absolute;
+            right: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-top: 6px solid transparent;
+            border-bottom: 6px solid transparent;
+            border-left: 8px solid var(--gold-primary);
+        }
+
+        .flow-phase {
+            width: 100%;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px dashed var(--glass-border);
+            border-radius: 16px;
+            position: relative;
+        }
+
+        .phase-label {
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--gold-primary);
+            background: var(--primary-dark);
+            padding: 0.25rem 0.75rem;
+        }
+
+        .phase-nodes {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .phase-nodes.horizontal {
+            flex-direction: row;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .decision-branches {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .branch {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .branch-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .branch-arrow {
+            width: 2px;
+            height: 15px;
+            background: var(--highlight-blue);
+        }
+
+        .parallel-processes {
+            display: flex;
+            gap: 3rem;
+            align-items: flex-start;
+        }
+
+        .parallel-track {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .parallel-divider {
+            display: flex;
+            align-items: center;
+            padding: 1rem 0.5rem;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+        }
+
+        .parallel-divider span {
+            font-size: 0.65rem;
+            letter-spacing: 2px;
+            color: var(--gold-primary);
+            background: var(--primary-blue);
+            padding: 0.5rem 0.25rem;
+            border-radius: 4px;
+        }
+
+        .llm-flow {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .provider-options {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .provider-badge {
+            font-size: 0.65rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 15px;
+            font-weight: 600;
+        }
+
+        .provider-badge.openai { background: rgba(16, 163, 127, 0.3); border: 1px solid #10a37f; }
+        .provider-badge.anthropic { background: rgba(204, 147, 102, 0.3); border: 1px solid #cc9366; }
+        .provider-badge.ollama { background: rgba(255, 255, 255, 0.1); border: 1px solid #888; }
+        .provider-badge.mcp { background: rgba(168, 85, 247, 0.3); border: 1px solid #a855f7; }
+
+        .output-branches {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .output-branch {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Swimlane Diagram */
+        .swimlane-diagram {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            backdrop-filter: blur(20px);
+        }
+
+        .swimlane-diagram h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.3rem;
+            margin-bottom: 0.5rem;
+            text-align: center;
+        }
+
+        .swimlane-diagram > p {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+        }
+
+        .swimlane-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .swimlane {
+            display: flex;
+            border: 1px solid var(--glass-border);
+            border-bottom: none;
+        }
+
+        .swimlane:last-of-type {
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .swimlane-header {
+            width: 140px;
+            padding: 1rem;
+            background: var(--accent-blue);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--gold-bright);
+            border-right: 1px solid var(--glass-border);
+            text-align: center;
+        }
+
+        .swimlane-content {
+            flex: 1;
+            padding: 1rem 2rem;
+            position: relative;
+            min-height: 70px;
+            display: flex;
+            align-items: center;
+        }
+
+        .swim-node {
+            position: absolute;
+            transform: translateX(-50%);
+        }
+
+        .swim-shape {
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--primary-blue) 100%);
+            border: 1px solid var(--highlight-blue);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+
+        .swim-shape.highlight {
+            background: linear-gradient(135deg, rgba(212, 165, 116, 0.3) 0%, rgba(255, 184, 0, 0.2) 100%);
+            border-color: var(--gold-primary);
+        }
+
+        .swim-connector {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, var(--highlight-blue), var(--gold-primary), var(--highlight-blue));
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .vertical-flow {
+            position: absolute;
+            width: 1px;
+            height: 100%;
+            background: repeating-linear-gradient(
+                180deg,
+                var(--glass-border) 0px,
+                var(--glass-border) 5px,
+                transparent 5px,
+                transparent 10px
+            );
+            top: 0;
+        }
+
+        /* Process Metrics */
+        .process-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+        }
+
+        .metric-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            backdrop-filter: blur(20px);
+            transition: all 0.3s ease;
+        }
+
+        .metric-card:hover {
+            border-color: var(--gold-primary);
+            transform: translateY(-3px);
+        }
+
+        .metric-icon {
+            font-size: 2rem;
+        }
+
+        .metric-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .metric-value {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--gold-bright);
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Responsive adjustments for new sections */
+        @media (max-width: 1200px) {
+            .blocks-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .process-metrics {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .bdat-layer {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .layer-item {
+                flex-direction: column;
+                gap: 0.25rem;
+            }
+
+            .item-label {
+                min-width: auto;
+            }
+
+            .matrix-header, .matrix-row {
+                grid-template-columns: 80px repeat(6, 1fr);
+            }
+
+            .matrix-cell {
+                padding: 0.5rem 0.25rem;
+                font-size: 0.7rem;
+            }
+
+            .matrix-legend {
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+
+            .parallel-processes {
+                flex-direction: column;
+                gap: 1.5rem;
+            }
+
+            .parallel-divider {
+                writing-mode: horizontal-tb;
+                padding: 0.5rem 1rem;
+            }
+
+            .decision-branches {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .swimlane {
+                flex-direction: column;
+            }
+
+            .swimlane-header {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--glass-border);
+            }
+
+            .swimlane-content {
+                min-height: 100px;
+            }
+
+            .process-metrics {
+                grid-template-columns: 1fr;
+            }
+
+            .llm-flow {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    <div class="grid-overlay"></div>
+    <div class="floating-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <header>
+        <div class="logo">
+            <div class="logo-icon">TD</div>
+            <span class="logo-text">TechDocGen <span style="font-size: 0.7em; color: var(--gold-bright);">by IBMC</span></span>
+        </div>
+        <nav>
+            <a href="#architecture">Architecture</a>
+            <a href="#components">Components</a>
+            <a href="#dataflow">Data Flow</a>
+            <a href="#techstack">Tech Stack</a>
+            <a href="#patterns">Patterns</a>
+            <a href="#building-blocks">Building Blocks</a>
+            <a href="#process-flow">Process Flow</a>
+        </nav>
+    </header>
+
+    <section class="hero">
+        <div class="hero-badge">
+            <span>Technical Architecture v1.0</span>
+        </div>
+        <h1>Intelligent Documentation<br><span>Generation System</span></h1>
+        <p><strong>TechDocGen by IBMC</strong> - A comprehensive technical documentation generator that automatically creates high-quality documentation from source code using Large Language Models with multi-language support and intelligent parsing.</p>
+        <div class="hero-stats">
+            <div class="stat">
+                <span class="stat-value">5</span>
+                <span class="stat-label">Languages</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">4</span>
+                <span class="stat-label">LLM Providers</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">3</span>
+                <span class="stat-label">Source Types</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">2</span>
+                <span class="stat-label">Output Formats</span>
+            </div>
+        </div>
+    </section>
+
+    <main>
+        <!-- Architecture Section -->
+        <section id="architecture" class="fade-in">
+            <div class="section-header">
+                <span class="section-number">01</span>
+                <h2 class="section-title">System Architecture</h2>
+                <div class="section-line"></div>
+            </div>
+            
+            <div class="architecture-diagram">
+                <div class="arch-layers">
+                    <div class="arch-layer">
+                        <div class="layer-label">
+                            <h3>Presentation</h3>
+                            <p>User Interfaces</p>
+                        </div>
+                        <div class="layer-content">
+                            <div class="arch-box highlight"><span>🌐 Web UI (Streamlit)</span></div>
+                            <div class="arch-box highlight"><span>⌨️ CLI (Click/Python)</span></div>
+                        </div>
+                    </div>
+
+                    <div class="connector">
+                        <div class="connector-line"></div>
+                    </div>
+
+                    <div class="arch-layer">
+                        <div class="layer-label">
+                            <h3>Business Logic</h3>
+                            <p>Core Processing</p>
+                        </div>
+                        <div class="layer-content">
+                            <div class="arch-box"><span>📄 Documentation Generator</span></div>
+                            <div class="arch-box"><span>🔗 Dependency Analyzer</span></div>
+                            <div class="arch-box"><span>📊 Sequence Diagram Gen</span></div>
+                        </div>
+                    </div>
+
+                    <div class="connector">
+                        <div class="connector-line"></div>
+                    </div>
+
+                    <div class="arch-layer">
+                        <div class="layer-label">
+                            <h3>Data Access</h3>
+                            <p>Source Readers</p>
+                        </div>
+                        <div class="layer-content">
+                            <div class="arch-box"><span>📁 File Reader</span></div>
+                            <div class="arch-box"><span>📂 Folder Reader</span></div>
+                            <div class="arch-box"><span>🔄 Git Reader</span></div>
+                        </div>
+                    </div>
+
+                    <div class="connector">
+                        <div class="connector-line"></div>
+                    </div>
+
+                    <div class="arch-layer">
+                        <div class="layer-label">
+                            <h3>Processing</h3>
+                            <p>Parsers & LLM</p>
+                        </div>
+                        <div class="layer-content">
+                            <div class="arch-box"><span>☕ Java Parser</span></div>
+                            <div class="arch-box"><span>🔷 C# Parser</span></div>
+                            <div class="arch-box"><span>🟣 VB.NET Parser</span></div>
+                            <div class="arch-box"><span>🔶 F# Parser</span></div>
+                            <div class="arch-box"><span>🐘 PHP Parser</span></div>
+                        </div>
+                    </div>
+
+                    <div class="connector">
+                        <div class="connector-line"></div>
+                    </div>
+
+                    <div class="arch-layer">
+                        <div class="layer-label">
+                            <h3>Integration</h3>
+                            <p>LLM Providers</p>
+                        </div>
+                        <div class="layer-content">
+                            <div class="arch-box"><span>🤖 OpenAI</span></div>
+                            <div class="arch-box"><span>🧠 Anthropic</span></div>
+                            <div class="arch-box"><span>🦙 Ollama</span></div>
+                            <div class="arch-box"><span>🔌 MCP</span></div>
+                        </div>
+                    </div>
+
+                    <div class="connector">
+                        <div class="connector-line"></div>
+                    </div>
+
+                    <div class="arch-layer">
+                        <div class="layer-label">
+                            <h3>Output</h3>
+                            <p>Documentation</p>
+                        </div>
+                        <div class="layer-content">
+                            <div class="arch-box highlight"><span>📝 Markdown Writer</span></div>
+                            <div class="arch-box highlight"><span>📑 PDF Generator</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Components Section -->
+        <section id="components" class="fade-in">
+            <div class="section-header">
+                <span class="section-number">02</span>
+                <h2 class="section-title">Core Components</h2>
+                <div class="section-line"></div>
+            </div>
+
+            <div class="components-grid">
+                <div class="component-card">
+                    <div class="component-icon">⚡</div>
+                    <h3>Documentation Generator</h3>
+                    <div class="subtitle">src/generator.py</div>
+                    <p>Main orchestration component that coordinates the documentation generation process. Initializes readers, parsers, and LLM providers while managing progress tracking.</p>
+                    <div class="component-tags">
+                        <span class="tag">Orchestrator</span>
+                        <span class="tag">Core</span>
+                        <span class="tag">Facade Pattern</span>
+                    </div>
+                </div>
+
+                <div class="component-card">
+                    <div class="component-icon">⚙️</div>
+                    <h3>Configuration Manager</h3>
+                    <div class="subtitle">src/config.py</div>
+                    <p>Centralized configuration management from YAML files and environment variables. Provides dot-notation access with default fallback support.</p>
+                    <div class="component-tags">
+                        <span class="tag">Singleton</span>
+                        <span class="tag">YAML</span>
+                        <span class="tag">Env Override</span>
+                    </div>
+                </div>
+
+                <div class="component-card">
+                    <div class="component-icon">📖</div>
+                    <h3>Readers Module</h3>
+                    <div class="subtitle">src/readers/</div>
+                    <p>Abstract and implement different source code reading strategies including file, folder, and Git repository support with filtering capabilities.</p>
+                    <div class="component-tags">
+                        <span class="tag">Strategy Pattern</span>
+                        <span class="tag">Extensible</span>
+                        <span class="tag">GitPython</span>
+                    </div>
+                </div>
+
+                <div class="component-card">
+                    <div class="component-icon">🔍</div>
+                    <h3>Parsers Module</h3>
+                    <div class="subtitle">src/parsers/</div>
+                    <p>Parse source code and extract structured information using Tree-sitter for AST parsing. Supports Java, C#, VB.NET, F#, and PHP.</p>
+                    <div class="component-tags">
+                        <span class="tag">Tree-sitter</span>
+                        <span class="tag">AST</span>
+                        <span class="tag">Multi-Language</span>
+                    </div>
+                </div>
+
+                <div class="component-card">
+                    <div class="component-icon">🧠</div>
+                    <h3>LLM Module</h3>
+                    <div class="subtitle">src/llm/</div>
+                    <p>Abstract and implement multiple LLM provider integrations with factory-based instantiation. Supports OpenAI, Anthropic, Ollama, and MCP.</p>
+                    <div class="component-tags">
+                        <span class="tag">Factory Pattern</span>
+                        <span class="tag">Multi-Provider</span>
+                        <span class="tag">Retry Logic</span>
+                    </div>
+                </div>
+
+                <div class="component-card">
+                    <div class="component-icon">🔗</div>
+                    <h3>Dependency Analyzer</h3>
+                    <div class="subtitle">src/dependency_analyzer.py</div>
+                    <p>Analyze code dependencies and generate dependency maps. Detects circular dependencies, orphaned files, and highly coupled components.</p>
+                    <div class="component-tags">
+                        <span class="tag">Graph Analysis</span>
+                        <span class="tag">Mermaid</span>
+                        <span class="tag">DOT/Graphviz</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data Flow Section -->
+        <section id="dataflow" class="fade-in">
+            <div class="section-header">
+                <span class="section-number">03</span>
+                <h2 class="section-title">Data Flow Pipeline</h2>
+                <div class="section-line"></div>
+            </div>
+
+            <div class="data-flow">
+                <div class="flow-steps">
+                    <div class="flow-step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4>User Input</h4>
+                            <p>User provides source type, LLM provider selection, and configuration options through Web UI or CLI.</p>
+                            <div class="step-items">
+                                <span class="step-item">File/Folder/Git</span>
+                                <span class="step-item">LLM Selection</span>
+                                <span class="step-item">Config Options</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4>Source Reading Phase</h4>
+                            <p>Appropriate reader discovers, filters, and reads source files with language detection.</p>
+                            <div class="step-items">
+                                <span class="step-item">FileReader</span>
+                                <span class="step-item">FolderReader</span>
+                                <span class="step-item">GitReader</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h4>Parsing Phase</h4>
+                            <p>Language-specific parser extracts structure using Tree-sitter AST parsing for each file.</p>
+                            <div class="step-items">
+                                <span class="step-item">Classes</span>
+                                <span class="step-item">Methods</span>
+                                <span class="step-item">Imports</span>
+                                <span class="step-item">Comments</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h4>Dependency Analysis</h4>
+                            <p>Optional phase that analyzes file dependencies, builds graphs, and detects circular dependencies.</p>
+                            <div class="step-items">
+                                <span class="step-item">Build Graph</span>
+                                <span class="step-item">Detect Cycles</span>
+                                <span class="step-item">Find Orphans</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <div class="step-number">5</div>
+                        <div class="step-content">
+                            <h4>Documentation Generation</h4>
+                            <p>LLM provider generates natural language documentation from parsed information for each file.</p>
+                            <div class="step-items">
+                                <span class="step-item">Prompt Preparation</span>
+                                <span class="step-item">LLM API Call</span>
+                                <span class="step-item">Response Processing</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <div class="step-number">6</div>
+                        <div class="step-content">
+                            <h4>Aggregation Phase</h4>
+                            <p>Combine all file documentation, add dependency maps and sequence diagrams to generate final output.</p>
+                            <div class="step-items">
+                                <span class="step-item">Merge Docs</span>
+                                <span class="step-item">Add Diagrams</span>
+                                <span class="step-item">Generate TOC</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <div class="step-number">7</div>
+                        <div class="step-content">
+                            <h4>Output Phase</h4>
+                            <p>Save final documentation as Markdown and optionally generate PDF with Confluence-style formatting.</p>
+                            <div class="step-items">
+                                <span class="step-item">Markdown</span>
+                                <span class="step-item">PDF</span>
+                                <span class="step-item">Dependency Export</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tech Stack Section -->
+        <section id="techstack" class="fade-in">
+            <div class="section-header">
+                <span class="section-number">04</span>
+                <h2 class="section-title">Technology Stack</h2>
+                <div class="section-line"></div>
+            </div>
+
+            <div class="tech-stack">
+                <div class="tech-category">
+                    <h3>Core Framework</h3>
+                    <div class="tech-list">
+                        <div class="tech-item"><span class="tech-dot"></span>Python 3.8+</div>
+                        <div class="tech-item"><span class="tech-dot"></span>Streamlit</div>
+                        <div class="tech-item"><span class="tech-dot"></span>Click CLI</div>
+                        <div class="tech-item"><span class="tech-dot"></span>PyYAML</div>
+                        <div class="tech-item"><span class="tech-dot"></span>python-dotenv</div>
+                    </div>
+                </div>
+
+                <div class="tech-category">
+                    <h3>Parsing & Analysis</h3>
+                    <div class="tech-list">
+                        <div class="tech-item"><span class="tech-dot"></span>Tree-sitter</div>
+                        <div class="tech-item"><span class="tech-dot"></span>tree-sitter-java</div>
+                        <div class="tech-item"><span class="tech-dot"></span>tree-sitter-c-sharp</div>
+                        <div class="tech-item"><span class="tech-dot"></span>tree-sitter-php</div>
+                        <div class="tech-item"><span class="tech-dot"></span>GitPython</div>
+                    </div>
+                </div>
+
+                <div class="tech-category">
+                    <h3>LLM Integration</h3>
+                    <div class="tech-list">
+                        <div class="tech-item"><span class="tech-dot"></span>openai</div>
+                        <div class="tech-item"><span class="tech-dot"></span>anthropic</div>
+                        <div class="tech-item"><span class="tech-dot"></span>ollama</div>
+                        <div class="tech-item"><span class="tech-dot"></span>Requests</div>
+                    </div>
+                </div>
+
+                <div class="tech-category">
+                    <h3>Output Generation</h3>
+                    <div class="tech-list">
+                        <div class="tech-item"><span class="tech-dot"></span>WeasyPrint</div>
+                        <div class="tech-item"><span class="tech-dot"></span>Pygments</div>
+                        <div class="tech-item"><span class="tech-dot"></span>Markdown</div>
+                        <div class="tech-item"><span class="tech-dot"></span>Rich</div>
+                        <div class="tech-item"><span class="tech-dot"></span>pathspec</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Design Patterns Section -->
+        <section id="patterns" class="fade-in">
+            <div class="section-header">
+                <span class="section-number">05</span>
+                <h2 class="section-title">Design Patterns</h2>
+                <div class="section-line"></div>
+            </div>
+
+            <div class="patterns-grid">
+                <div class="pattern-card">
+                    <div class="pattern-icon">🏭</div>
+                    <h4>Factory Pattern</h4>
+                    <p>LLMFactory creates provider instances dynamically</p>
+                </div>
+
+                <div class="pattern-card">
+                    <div class="pattern-icon">🎯</div>
+                    <h4>Strategy Pattern</h4>
+                    <p>Interchangeable readers, parsers, and LLM providers</p>
+                </div>
+
+                <div class="pattern-card">
+                    <div class="pattern-icon">📋</div>
+                    <h4>Template Method</h4>
+                    <p>Base classes with abstract methods for implementations</p>
+                </div>
+
+                <div class="pattern-card">
+                    <div class="pattern-icon">🎭</div>
+                    <h4>Facade Pattern</h4>
+                    <p>DocumentationGenerator hides system complexity</p>
+                </div>
+
+                <div class="pattern-card">
+                    <div class="pattern-icon">1️⃣</div>
+                    <h4>Singleton</h4>
+                    <p>Configuration instance shared across components</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Architecture Building Blocks Section -->
+        <section id="building-blocks" class="fade-in">
+            <div class="section-header">
+                <span class="section-number">06</span>
+                <h2 class="section-title">Architecture Building Blocks</h2>
+                <div class="section-line"></div>
+            </div>
+
+            <div class="building-blocks-container">
+                <!-- BDAT Framework -->
+                <div class="bdat-framework">
+                    <div class="bdat-header">
+                        <h3>BDAT Architecture Framework</h3>
+                        <p>Business, Data, Application, Technology Layers</p>
+                    </div>
+                    
+                    <div class="bdat-grid">
+                        <!-- Business Layer -->
+                        <div class="bdat-layer business-layer">
+                            <div class="layer-icon-wrapper">
+                                <div class="layer-icon">💼</div>
+                            </div>
+                            <div class="layer-info">
+                                <h4>Business Architecture</h4>
+                                <div class="layer-items">
+                                    <div class="layer-item">
+                                        <span class="item-label">Capabilities</span>
+                                        <span class="item-value">Documentation Generation, Code Analysis, Dependency Mapping</span>
+                                    </div>
+                                    <div class="layer-item">
+                                        <span class="item-label">Services</span>
+                                        <span class="item-value">Multi-language Support, LLM Integration, Output Formatting</span>
+                                    </div>
+                                    <div class="layer-item">
+                                        <span class="item-label">Stakeholders</span>
+                                        <span class="item-value">Developers, Tech Writers, DevOps Engineers, Architects</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Data Layer -->
+                        <div class="bdat-layer data-layer">
+                            <div class="layer-icon-wrapper">
+                                <div class="layer-icon">🗄️</div>
+                            </div>
+                            <div class="layer-info">
+                                <h4>Data Architecture</h4>
+                                <div class="layer-items">
+                                    <div class="layer-item">
+                                        <span class="item-label">Data Entities</span>
+                                        <span class="item-value">FileInfo, ParsedInfo, DependencyAnalysis, Documentation</span>
+                                    </div>
+                                    <div class="layer-item">
+                                        <span class="item-label">Data Flow</span>
+                                        <span class="item-value">Source → Parsed Structure → LLM Input → Generated Docs</span>
+                                    </div>
+                                    <div class="layer-item">
+                                        <span class="item-label">Storage</span>
+                                        <span class="item-value">File System, Git Repositories, Temporary Cache</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Application Layer -->
+                        <div class="bdat-layer application-layer">
+                            <div class="layer-icon-wrapper">
+                                <div class="layer-icon">⚙️</div>
+                            </div>
+                            <div class="layer-info">
+                                <h4>Application Architecture</h4>
+                                <div class="layer-items">
+                                    <div class="layer-item">
+                                        <span class="item-label">Components</span>
+                                        <span class="item-value">Generator, Readers, Parsers, LLM Module, Analyzers</span>
+                                    </div>
+                                    <div class="layer-item">
+                                        <span class="item-label">Interfaces</span>
+                                        <span class="item-value">Web UI (Streamlit), CLI (Click), API Endpoints</span>
+                                    </div>
+                                    <div class="layer-item">
+                                        <span class="item-label">Integration</span>
+                                        <span class="item-value">OpenAI API, Anthropic API, Ollama Local, MCP Protocol</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Technology Layer -->
+                        <div class="bdat-layer technology-layer">
+                            <div class="layer-icon-wrapper">
+                                <div class="layer-icon">🖥️</div>
+                            </div>
+                            <div class="layer-info">
+                                <h4>Technology Architecture</h4>
+                                <div class="layer-items">
+                                    <div class="layer-item">
+                                        <span class="item-label">Platform</span>
+                                        <span class="item-value">Python 3.8+, Cross-platform (Windows, Linux, macOS)</span>
+                                    </div>
+                                    <div class="layer-item">
+                                        <span class="item-label">Infrastructure</span>
+                                        <span class="item-value">Local Execution, Cloud LLM APIs, Git Integration</span>
+                                    </div>
+                                    <div class="layer-item">
+                                        <span class="item-label">Tools</span>
+                                        <span class="item-value">Tree-sitter, WeasyPrint, Pygments, GitPython</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Component Interaction Matrix -->
+                <div class="interaction-matrix">
+                    <h3>Component Interaction Matrix</h3>
+                    <div class="matrix-grid">
+                        <div class="matrix-header">
+                            <div class="matrix-cell corner"></div>
+                            <div class="matrix-cell header-cell">Generator</div>
+                            <div class="matrix-cell header-cell">Readers</div>
+                            <div class="matrix-cell header-cell">Parsers</div>
+                            <div class="matrix-cell header-cell">LLM</div>
+                            <div class="matrix-cell header-cell">Analyzer</div>
+                            <div class="matrix-cell header-cell">Output</div>
+                        </div>
+                        <div class="matrix-row">
+                            <div class="matrix-cell row-header">Generator</div>
+                            <div class="matrix-cell self">●</div>
+                            <div class="matrix-cell active">⬤</div>
+                            <div class="matrix-cell active">⬤</div>
+                            <div class="matrix-cell active">⬤</div>
+                            <div class="matrix-cell active">⬤</div>
+                            <div class="matrix-cell active">⬤</div>
+                        </div>
+                        <div class="matrix-row">
+                            <div class="matrix-cell row-header">Readers</div>
+                            <div class="matrix-cell passive">○</div>
+                            <div class="matrix-cell self">●</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell none">-</div>
+                        </div>
+                        <div class="matrix-row">
+                            <div class="matrix-cell row-header">Parsers</div>
+                            <div class="matrix-cell passive">○</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell self">●</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell passive">○</div>
+                            <div class="matrix-cell none">-</div>
+                        </div>
+                        <div class="matrix-row">
+                            <div class="matrix-cell row-header">LLM</div>
+                            <div class="matrix-cell passive">○</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell self">●</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell none">-</div>
+                        </div>
+                        <div class="matrix-row">
+                            <div class="matrix-cell row-header">Analyzer</div>
+                            <div class="matrix-cell passive">○</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell active">⬤</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell self">●</div>
+                            <div class="matrix-cell none">-</div>
+                        </div>
+                        <div class="matrix-row">
+                            <div class="matrix-cell row-header">Output</div>
+                            <div class="matrix-cell passive">○</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell none">-</div>
+                            <div class="matrix-cell self">●</div>
+                        </div>
+                    </div>
+                    <div class="matrix-legend">
+                        <div class="legend-item"><span class="legend-symbol active">⬤</span> Calls/Uses</div>
+                        <div class="legend-item"><span class="legend-symbol passive">○</span> Called By</div>
+                        <div class="legend-item"><span class="legend-symbol self">●</span> Self</div>
+                        <div class="legend-item"><span class="legend-symbol none">-</span> No Direct Interaction</div>
+                    </div>
+                </div>
+
+                <!-- Building Blocks Grid -->
+                <div class="blocks-grid">
+                    <div class="block-card interface-block">
+                        <div class="block-header">
+                            <span class="block-type">Interface Block</span>
+                            <span class="block-badge">UI/UX</span>
+                        </div>
+                        <h4>User Interaction Layer</h4>
+                        <div class="block-content">
+                            <div class="block-item">
+                                <span class="block-icon">🌐</span>
+                                <div class="block-details">
+                                    <strong>Web Interface</strong>
+                                    <p>Streamlit-based responsive UI with tabs, progress tracking, live preview</p>
+                                </div>
+                            </div>
+                            <div class="block-item">
+                                <span class="block-icon">⌨️</span>
+                                <div class="block-details">
+                                    <strong>Command Line</strong>
+                                    <p>Click-based CLI with Rich terminal output, progress bars, verbose mode</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="block-card processing-block">
+                        <div class="block-header">
+                            <span class="block-type">Processing Block</span>
+                            <span class="block-badge">Core</span>
+                        </div>
+                        <h4>Code Analysis Engine</h4>
+                        <div class="block-content">
+                            <div class="block-item">
+                                <span class="block-icon">🌳</span>
+                                <div class="block-details">
+                                    <strong>AST Parser</strong>
+                                    <p>Tree-sitter based parsing with language-specific grammars</p>
+                                </div>
+                            </div>
+                            <div class="block-item">
+                                <span class="block-icon">🔗</span>
+                                <div class="block-details">
+                                    <strong>Dependency Graph</strong>
+                                    <p>Circular detection, orphan finder, coupling analyzer</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="block-card intelligence-block">
+                        <div class="block-header">
+                            <span class="block-type">Intelligence Block</span>
+                            <span class="block-badge">AI/ML</span>
+                        </div>
+                        <h4>LLM Integration Hub</h4>
+                        <div class="block-content">
+                            <div class="block-item">
+                                <span class="block-icon">☁️</span>
+                                <div class="block-details">
+                                    <strong>Cloud Providers</strong>
+                                    <p>OpenAI GPT-4, Anthropic Claude API integration</p>
+                                </div>
+                            </div>
+                            <div class="block-item">
+                                <span class="block-icon">🏠</span>
+                                <div class="block-details">
+                                    <strong>Local Models</strong>
+                                    <p>Ollama support for Llama, DeepSeek, Mistral models</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="block-card output-block">
+                        <div class="block-header">
+                            <span class="block-type">Output Block</span>
+                            <span class="block-badge">Export</span>
+                        </div>
+                        <h4>Document Generation</h4>
+                        <div class="block-content">
+                            <div class="block-item">
+                                <span class="block-icon">📝</span>
+                                <div class="block-details">
+                                    <strong>Markdown</strong>
+                                    <p>Structured documentation with Mermaid diagrams support</p>
+                                </div>
+                            </div>
+                            <div class="block-item">
+                                <span class="block-icon">📄</span>
+                                <div class="block-details">
+                                    <strong>PDF Export</strong>
+                                    <p>Confluence-style formatting with syntax highlighting</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Process Flow Diagram Section -->
+        <section id="process-flow" class="fade-in">
+            <div class="section-header">
+                <span class="section-number">07</span>
+                <h2 class="section-title">Process Flow Diagram</h2>
+                <div class="section-line"></div>
+            </div>
+
+            <div class="process-flow-container">
+                <!-- Main Process Flow -->
+                <div class="flow-diagram">
+                    <div class="flow-title">
+                        <h3>End-to-End Documentation Generation Process</h3>
+                        <p>From source code input to final documentation output</p>
+                    </div>
+
+                    <div class="flow-canvas">
+                        <!-- Start Node -->
+                        <div class="flow-node start-node">
+                            <div class="node-shape start">
+                                <span>START</span>
+                            </div>
+                        </div>
+
+                        <div class="flow-arrow vertical"></div>
+
+                        <!-- Input Phase -->
+                        <div class="flow-phase">
+                            <div class="phase-label">INPUT PHASE</div>
+                            <div class="phase-nodes">
+                                <div class="flow-node decision-node">
+                                    <div class="node-shape diamond">
+                                        <span>Select Source Type</span>
+                                    </div>
+                                    <div class="decision-branches">
+                                        <div class="branch">
+                                            <span class="branch-label">File</span>
+                                            <div class="branch-arrow"></div>
+                                            <div class="node-shape process small">FileReader</div>
+                                        </div>
+                                        <div class="branch">
+                                            <span class="branch-label">Folder</span>
+                                            <div class="branch-arrow"></div>
+                                            <div class="node-shape process small">FolderReader</div>
+                                        </div>
+                                        <div class="branch">
+                                            <span class="branch-label">Git</span>
+                                            <div class="branch-arrow"></div>
+                                            <div class="node-shape process small">GitReader</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flow-arrow vertical"></div>
+
+                        <!-- Processing Phase -->
+                        <div class="flow-phase">
+                            <div class="phase-label">PROCESSING PHASE</div>
+                            <div class="phase-nodes horizontal">
+                                <div class="flow-node">
+                                    <div class="node-shape process">
+                                        <span class="node-icon">📂</span>
+                                        <span>Read Source Files</span>
+                                    </div>
+                                    <div class="node-output">FileInfo[]</div>
+                                </div>
+                                
+                                <div class="flow-arrow horizontal"></div>
+                                
+                                <div class="flow-node">
+                                    <div class="node-shape process">
+                                        <span class="node-icon">🔍</span>
+                                        <span>Detect Language</span>
+                                    </div>
+                                    <div class="node-output">Language Type</div>
+                                </div>
+                                
+                                <div class="flow-arrow horizontal"></div>
+                                
+                                <div class="flow-node">
+                                    <div class="node-shape process highlight">
+                                        <span class="node-icon">🌳</span>
+                                        <span>Parse AST</span>
+                                    </div>
+                                    <div class="node-output">ParsedInfo</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flow-arrow vertical"></div>
+
+                        <!-- Analysis Phase -->
+                        <div class="flow-phase">
+                            <div class="phase-label">ANALYSIS PHASE</div>
+                            <div class="phase-nodes">
+                                <div class="parallel-processes">
+                                    <div class="parallel-track">
+                                        <div class="flow-node">
+                                            <div class="node-shape process">
+                                                <span class="node-icon">🔗</span>
+                                                <span>Build Dependency Graph</span>
+                                            </div>
+                                        </div>
+                                        <div class="flow-arrow vertical small"></div>
+                                        <div class="flow-node">
+                                            <div class="node-shape process">
+                                                <span class="node-icon">🔄</span>
+                                                <span>Detect Circular Deps</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="parallel-divider">
+                                        <span>PARALLEL</span>
+                                    </div>
+                                    <div class="parallel-track">
+                                        <div class="flow-node">
+                                            <div class="node-shape process">
+                                                <span class="node-icon">📊</span>
+                                                <span>Extract Structure</span>
+                                            </div>
+                                        </div>
+                                        <div class="flow-arrow vertical small"></div>
+                                        <div class="flow-node">
+                                            <div class="node-shape process">
+                                                <span class="node-icon">📈</span>
+                                                <span>Generate Diagrams</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flow-arrow vertical"></div>
+
+                        <!-- LLM Phase -->
+                        <div class="flow-phase">
+                            <div class="phase-label">LLM GENERATION PHASE</div>
+                            <div class="phase-nodes">
+                                <div class="llm-flow">
+                                    <div class="flow-node">
+                                        <div class="node-shape process">
+                                            <span class="node-icon">📝</span>
+                                            <span>Prepare Prompt</span>
+                                        </div>
+                                    </div>
+                                    <div class="flow-arrow horizontal"></div>
+                                    <div class="flow-node decision-node">
+                                        <div class="node-shape diamond small">
+                                            <span>LLM Provider</span>
+                                        </div>
+                                        <div class="provider-options">
+                                            <div class="provider-badge openai">OpenAI</div>
+                                            <div class="provider-badge anthropic">Anthropic</div>
+                                            <div class="provider-badge ollama">Ollama</div>
+                                            <div class="provider-badge mcp">MCP</div>
+                                        </div>
+                                    </div>
+                                    <div class="flow-arrow horizontal"></div>
+                                    <div class="flow-node">
+                                        <div class="node-shape process highlight">
+                                            <span class="node-icon">🧠</span>
+                                            <span>Generate Documentation</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flow-arrow vertical"></div>
+
+                        <!-- Output Phase -->
+                        <div class="flow-phase">
+                            <div class="phase-label">OUTPUT PHASE</div>
+                            <div class="phase-nodes horizontal">
+                                <div class="flow-node">
+                                    <div class="node-shape process">
+                                        <span class="node-icon">🔀</span>
+                                        <span>Aggregate Results</span>
+                                    </div>
+                                </div>
+                                <div class="flow-arrow horizontal"></div>
+                                <div class="flow-node decision-node">
+                                    <div class="node-shape diamond small">
+                                        <span>Output Format?</span>
+                                    </div>
+                                </div>
+                                <div class="output-branches">
+                                    <div class="output-branch">
+                                        <div class="flow-arrow horizontal"></div>
+                                        <div class="node-shape data">
+                                            <span class="node-icon">📝</span>
+                                            <span>Markdown</span>
+                                        </div>
+                                    </div>
+                                    <div class="output-branch">
+                                        <div class="flow-arrow horizontal"></div>
+                                        <div class="node-shape data">
+                                            <span class="node-icon">📄</span>
+                                            <span>PDF</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flow-arrow vertical"></div>
+
+                        <!-- End Node -->
+                        <div class="flow-node end-node">
+                            <div class="node-shape end">
+                                <span>END</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Swimlane Diagram -->
+                <div class="swimlane-diagram">
+                    <h3>Swimlane Process Flow</h3>
+                    <p>Responsibility mapping across system components</p>
+
+                    <div class="swimlane-container">
+                        <div class="swimlane">
+                            <div class="swimlane-header">User Interface</div>
+                            <div class="swimlane-content">
+                                <div class="swim-node" style="left: 5%;">
+                                    <div class="swim-shape">Input Source</div>
+                                </div>
+                                <div class="swim-node" style="left: 85%;">
+                                    <div class="swim-shape">Display Output</div>
+                                </div>
+                                <div class="swim-connector" style="left: 15%; width: 70%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="swimlane">
+                            <div class="swimlane-header">Generator</div>
+                            <div class="swimlane-content">
+                                <div class="swim-node" style="left: 15%;">
+                                    <div class="swim-shape">Initialize</div>
+                                </div>
+                                <div class="swim-node" style="left: 45%;">
+                                    <div class="swim-shape">Orchestrate</div>
+                                </div>
+                                <div class="swim-node" style="left: 75%;">
+                                    <div class="swim-shape">Aggregate</div>
+                                </div>
+                                <div class="swim-connector" style="left: 22%; width: 60%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="swimlane">
+                            <div class="swimlane-header">Readers</div>
+                            <div class="swimlane-content">
+                                <div class="swim-node" style="left: 25%;">
+                                    <div class="swim-shape">Read Files</div>
+                                </div>
+                                <div class="swim-connector" style="left: 15%; width: 18%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="swimlane">
+                            <div class="swimlane-header">Parsers</div>
+                            <div class="swimlane-content">
+                                <div class="swim-node" style="left: 35%;">
+                                    <div class="swim-shape">Parse AST</div>
+                                </div>
+                                <div class="swim-connector" style="left: 32%; width: 10%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="swimlane">
+                            <div class="swimlane-header">LLM Module</div>
+                            <div class="swimlane-content">
+                                <div class="swim-node" style="left: 55%;">
+                                    <div class="swim-shape highlight">Generate Docs</div>
+                                </div>
+                                <div class="swim-connector" style="left: 45%; width: 18%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="swimlane">
+                            <div class="swimlane-header">Output Writers</div>
+                            <div class="swimlane-content">
+                                <div class="swim-node" style="left: 75%;">
+                                    <div class="swim-shape">Format Output</div>
+                                </div>
+                                <div class="swim-connector" style="left: 75%; width: 10%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Vertical flow indicators -->
+                        <div class="vertical-flow" style="left: 10%;"></div>
+                        <div class="vertical-flow" style="left: 20%;"></div>
+                        <div class="vertical-flow" style="left: 30%;"></div>
+                        <div class="vertical-flow" style="left: 40%;"></div>
+                        <div class="vertical-flow" style="left: 50%;"></div>
+                        <div class="vertical-flow" style="left: 60%;"></div>
+                        <div class="vertical-flow" style="left: 70%;"></div>
+                        <div class="vertical-flow" style="left: 80%;"></div>
+                        <div class="vertical-flow" style="left: 90%;"></div>
+                    </div>
+                </div>
+
+                <!-- Process Metrics -->
+                <div class="process-metrics">
+                    <div class="metric-card">
+                        <div class="metric-icon">⏱️</div>
+                        <div class="metric-info">
+                            <span class="metric-value">Sequential</span>
+                            <span class="metric-label">Processing Mode</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">📊</div>
+                        <div class="metric-info">
+                            <span class="metric-value">7 Phases</span>
+                            <span class="metric-label">Pipeline Stages</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">🔄</div>
+                        <div class="metric-info">
+                            <span class="metric-value">Retry Logic</span>
+                            <span class="metric-label">Error Handling</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">📈</div>
+                        <div class="metric-info">
+                            <span class="metric-value">Progress Track</span>
+                            <span class="metric-label">Real-time Updates</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="footer-left">
+            <span class="footer-logo">TechDocGen by IBMC</span>
+            <div class="footer-links">
+                <a href="#architecture">Architecture</a>
+                <a href="#components">Components</a>
+                <a href="#dataflow">Data Flow</a>
+            </div>
+        </div>
+        <div class="footer-right">
+            Document Version 1.0 • January 2025 • Coretax Theme
+        </div>
+    </footer>
+
+    <script>
+        // Scroll-based fade-in animation
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+        // Smooth scroll for navigation
+        document.querySelectorAll('nav a, .footer-links a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetId = link.getAttribute('href');
+                const targetSection = document.querySelector(targetId);
+                if (targetSection) {
+                    targetSection.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+
+        // Add hover effect sound (optional visual feedback)
+        document.querySelectorAll('.arch-box, .component-card, .pattern-card').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+            });
+        });
+    </script>
+</body>
+</html>

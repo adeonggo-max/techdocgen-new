@@ -1,0 +1,118 @@
+{
+  "passed": [
+    {
+      "test": "Config Loading",
+      "message": "Configuration loaded successfully"
+    },
+    {
+      "test": "FileReader - Java",
+      "message": "Read 1 file(s)"
+    },
+    {
+      "test": "FolderReader",
+      "message": "Read 3599 file(s) from folder"
+    },
+    {
+      "test": "Java Parser",
+      "message": "Found 1 class(es)"
+    },
+    {
+      "test": "C# Parser",
+      "message": "Found 1 class(es)"
+    },
+    {
+      "test": "PHP Parser",
+      "message": "Found 1 class(es)"
+    },
+    {
+      "test": "Dependency Analyzer - Basic",
+      "message": "Analyzed 2 files, found 1 dependencies"
+    },
+    {
+      "test": "Dependency Analyzer - Circular Detection",
+      "message": "Circular detection executed (found 1 cycles)"
+    },
+    {
+      "test": "Dependency Analyzer - JSON Export",
+      "message": ""
+    },
+    {
+      "test": "Dependency Analyzer - DOT Export",
+      "message": ""
+    },
+    {
+      "test": "Dependency Analyzer - Mermaid Export",
+      "message": ""
+    },
+    {
+      "test": "Dependency Analyzer - Markdown Export",
+      "message": ""
+    },
+    {
+      "test": "Generator Initialization",
+      "message": "Generator initialized successfully"
+    },
+    {
+      "test": "Generator - Dependency Map Method",
+      "message": "Created docs/dependency_map.json"
+    },
+    {
+      "test": "Edge Case - Empty Files",
+      "message": ""
+    },
+    {
+      "test": "Edge Case - Invalid Code",
+      "message": "Handled invalid code gracefully"
+    },
+    {
+      "test": "Edge Case - No Imports",
+      "message": "Handled file with no imports"
+    },
+    {
+      "test": "Edge Case - Unknown Language",
+      "message": "Handled unknown language"
+    },
+    {
+      "test": "Backward Compat - generate_from_file",
+      "message": "Method exists and accessible"
+    },
+    {
+      "test": "Backward Compat - Config Structure",
+      "message": "All config keys present"
+    },
+    {
+      "test": "Import - Config",
+      "message": ""
+    },
+    {
+      "test": "Import - DocumentationGenerator",
+      "message": ""
+    },
+    {
+      "test": "Import - DependencyAnalyzer",
+      "message": ""
+    },
+    {
+      "test": "Import - FileReader",
+      "message": ""
+    },
+    {
+      "test": "Import - FolderReader",
+      "message": ""
+    },
+    {
+      "test": "Import - JavaParser",
+      "message": ""
+    },
+    {
+      "test": "Import - CSharpParser",
+      "message": ""
+    },
+    {
+      "test": "Import - PHPParser",
+      "message": ""
+    }
+  ],
+  "failed": [],
+  "warnings": []
+}

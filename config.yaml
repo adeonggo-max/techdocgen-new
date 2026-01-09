@@ -1,0 +1,87 @@
+# TechDocGen by IBMC - Configuration File
+# Technical Documentation Generator Configuration
+
+# Supported languages
+languages:
+  - java
+  - csharp
+  - vbnet
+  - fsharp
+  - php
+
+# File extensions mapping
+extensions:
+  java: [.java]
+  csharp: [.cs, .cshtml]  # C# and Razor C# files
+  vbnet: [.vb, .vbhtml]   # VB.NET and Razor VB files
+  fsharp: [.fs, .fsx]     # F# source files
+  php: [.php]
+
+# LLM Providers
+llm_providers:
+  openai:
+    enabled: true
+    model: gpt-4-turbo-preview
+    temperature: 0.3
+    max_tokens: 4000
+  
+  anthropic:
+    enabled: true
+    model: claude-sonnet-4-5-20250929
+    temperature: 0.3
+    max_tokens: 4000
+  
+  ollama:
+    enabled: true
+    # Recommended models for code documentation:
+    # - deepseek-coder:6.7b (best balance, ~8GB RAM) - RECOMMENDED
+    # - deepseek-coder:33b (best quality, ~24GB RAM)
+    # - codellama:13b (good quality, ~10GB RAM)
+    # - qwen2.5-coder:7b (fast, ~6GB RAM)
+    # - llama3.2:3b (lightweight, ~4GB RAM)
+    # Pull models with: ollama pull <model-name>
+    # See OLLAMA_SETUP_GUIDE.md for detailed instructions
+    model: llama3.2
+    base_url: http://localhost:11434
+    temperature: 0.3  # Recommended: 0.2-0.4 for documentation
+  
+  mcp:
+    enabled: true
+    server_url: http://localhost:8000
+
+# Documentation settings
+documentation:
+  include_comments: true
+  include_imports: true
+  include_methods: true
+  include_classes: true
+  include_functions: true
+  max_file_size_mb: 10
+  include_sequence_diagrams: false  # Generate sequence diagrams (set to true to enable, but may have syntax errors)
+  include_dependency_map: false  # Generate dependency map analysis (set to true to enable)
+  # Template configuration
+  template: "confluence.md"  # Template to use: "confluence.md" (recommended for consistent structure), "default.md", or custom template name
+  template_dir: null  # Custom template directory (null = use default ./templates)
+  exclude_patterns:
+    - "**/node_modules/**"
+    - "**/vendor/**"
+    - "**/bin/**"
+    - "**/obj/**"
+    - "**/.git/**"
+    - "**/target/**"
+    - "**/build/**"
+
+# Output settings
+output:
+  format: markdown
+  directory: ./docs
+  filename_template: "{project_name}_technical_docs.md"
+  include_code_examples: true
+  include_architecture_diagram: true
+
+# Dependency map settings
+dependency_map:
+  enabled: false  # Enable dependency map generation
+  formats: [json, markdown]  # Available formats: json, dot, mermaid, markdown
+  output_directory: ./docs  # Directory for dependency map files
+

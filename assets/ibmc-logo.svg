@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40" width="120" height="40">
+  <!-- Modern minimalist IBMC logo -->
+  <defs>
+    <linearGradient id="ibmcGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#0066CC;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#004499;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- IBMC text with clean, modern typography -->
+  <text x="5" y="28" font-family="Arial, sans-serif" font-size="24" font-weight="600" fill="url(#ibmcGradient)" letter-spacing="2">IBMC</text>
+  
+  <!-- Optional: Subtle accent line -->
+  <line x1="5" y1="32" x2="115" y2="32" stroke="url(#ibmcGradient)" stroke-width="1.5" opacity="0.3"/>
+</svg>
