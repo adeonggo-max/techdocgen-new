@@ -27,13 +27,22 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 3. Install dependencies:
+
+**For Linux/Mac:**
 ```bash
 pip install -r requirements.txt
 ```
 
+**For Windows (recommended if you encounter gobject-2-0-0 errors):**
+```bash
+pip install -r requirements-windows.txt
+```
+
+**Note:** The main `requirements.txt` includes `weasyprint` which requires GTK/GObject libraries that can be problematic on Windows. If you encounter errors like "OSEerror gobeject-2-0-0 error" on Windows, use `requirements-windows.txt` instead, which uses `xhtml2pdf` (a Windows-compatible PDF generator).
+
 4. (Optional) Set up environment variables:
 ```bash
-cp .env.example .env
+cp .env.example .env  # On Windows: copy .env.example .env
 # Edit .env with your API keys
 ```
 
@@ -253,6 +262,25 @@ llm_providers:
 
 ## Troubleshooting
 
+### Windows Installation Issues
+
+**Error: "OSEerror gobeject-2-0-0 error" or similar GTK/GObject errors**
+
+This occurs because `weasyprint` requires GTK/GObject libraries that are difficult to install on Windows. Solution:
+
+1. Use the Windows-specific requirements file:
+   ```bash
+   pip install -r requirements-windows.txt
+   ```
+
+2. The application will automatically use `xhtml2pdf` instead of `weasyprint` on Windows, which doesn't require GTK dependencies.
+
+3. If you still encounter issues, you can manually install:
+   ```bash
+   pip uninstall weasyprint
+   pip install xhtml2pdf
+   ```
+
 ### Ollama Connection Error
 - Ensure Ollama is running: `ollama serve`
 - Check the base URL in config matches your Ollama setup
@@ -264,6 +292,10 @@ llm_providers:
 ### Large Projects
 - Increase `max_file_size_mb` in config if needed
 - Consider processing specific folders instead of entire projects
+
+### PDF Generation Issues
+- On Windows, the app automatically falls back to `xhtml2pdf` if `weasyprint` is unavailable
+- If PDF generation fails, check that either `weasyprint` (Linux/Mac) or `xhtml2pdf` (Windows) is installed
 
 ## License
 

@@ -5,10 +5,24 @@ from io import BytesIO
 from pathlib import Path
 from typing import Optional
 import markdown
-from weasyprint import HTML, CSS
 from pygments import highlight
 from pygments.lexers import get_lexer_by_name, TextLexer
 from pygments.formatters import HtmlFormatter
+
+# Try to import WeasyPrint (may fail on Windows)
+try:
+    from weasyprint import HTML, CSS
+    WEASYPRINT_AVAILABLE = True
+except (ImportError, OSError) as e:
+    WEASYPRINT_AVAILABLE = False
+    WEASYPRINT_ERROR = str(e)
+
+# Try to import xhtml2pdf as fallback (Windows-compatible)
+try:
+    from xhtml2pdf import pisa
+    XHTML2PDF_AVAILABLE = True
+except ImportError:
+    XHTML2PDF_AVAILABLE = False
 
 
 class PDFGenerator:
@@ -235,6 +249,15 @@ class PDFGenerator:
     def __init__(self):
         """Initialize PDF generator"""
         self.html_formatter = HtmlFormatter(style='default', noclasses=True, nowrap=True)
+        
+        # Check available PDF backends
+        if not WEASYPRINT_AVAILABLE and not XHTML2PDF_AVAILABLE:
+            raise RuntimeError(
+                "No PDF generation library available. Please install either:\n"
+                "  - weasyprint (Linux/Mac): pip install weasyprint\n"
+                "  - xhtml2pdf (Windows-compatible): pip install xhtml2pdf\n"
+                f"WeasyPrint error: {WEASYPRINT_ERROR if not WEASYPRINT_AVAILABLE else 'N/A'}"
+            )
     
     def _process_code_blocks(self, html: str) -> str:
         """Process code blocks with syntax highlighting"""
@@ -351,13 +374,27 @@ class PDFGenerator:
         </html>
         """
         
-        # Generate PDF
-        html_doc = HTML(string=full_html)
-        css_doc = CSS(string=self.CONFLUENCE_CSS)
-        
+        # Generate PDF using available backend
         pdf_bytes = BytesIO()
-        html_doc.write_pdf(pdf_bytes, stylesheets=[css_doc])
-        pdf_bytes.seek(0)
+        
+        if WEASYPRINT_AVAILABLE:
+            # Use WeasyPrint (preferred, better CSS support)
+            try:
+                html_doc = HTML(string=full_html)
+                css_doc = CSS(string=self.CONFLUENCE_CSS)
+                html_doc.write_pdf(pdf_bytes, stylesheets=[css_doc])
+                pdf_bytes.seek(0)
+            except Exception as e:
+                # Fallback to xhtml2pdf if WeasyPrint fails
+                if XHTML2PDF_AVAILABLE:
+                    self._generate_pdf_xhtml2pdf(full_html, pdf_bytes)
+                else:
+                    raise RuntimeError(f"WeasyPrint failed: {e}. Please install xhtml2pdf as fallback.")
+        elif XHTML2PDF_AVAILABLE:
+            # Use xhtml2pdf (Windows-compatible fallback)
+            self._generate_pdf_xhtml2pdf(full_html, pdf_bytes)
+        else:
+            raise RuntimeError("No PDF generation library available")
         
         # Save to file if path provided
         if output_path:
@@ -366,6 +403,51 @@ class PDFGenerator:
             pdf_bytes.seek(0)
         
         return pdf_bytes
+    
+    def _generate_pdf_xhtml2pdf(self, html_content: str, pdf_bytes: BytesIO):
+        """Generate PDF using xhtml2pdf (Windows-compatible)"""
+        # Convert CSS to inline styles for xhtml2pdf (it has limited CSS support)
+        # For now, we'll use a simplified approach
+        html_with_inline_css = self._convert_css_to_inline(html_content)
+        
+        # Generate PDF
+        result = pisa.CreatePDF(
+            html_with_inline_css,
+            dest=pdf_bytes,
+            encoding='utf-8'
+        )
+        
+        if result.err:
+            raise RuntimeError(f"PDF generation failed: {result.err}")
+        
+        pdf_bytes.seek(0)
+    
+    def _convert_css_to_inline(self, html_content: str) -> str:
+        """Convert CSS styles to inline styles for xhtml2pdf compatibility"""
+        # This is a simplified version - xhtml2pdf has limited CSS support
+        # We'll inject basic inline styles
+        inline_styles = """
+        <style>
+            body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #172B4D; }
+            h1 { font-size: 32px; font-weight: 600; color: #172B4D; margin-top: 0; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #DFE1E6; }
+            h2 { font-size: 24px; font-weight: 600; color: #172B4D; margin-top: 32px; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #DFE1E6; }
+            h3 { font-size: 20px; font-weight: 600; color: #172B4D; margin-top: 24px; margin-bottom: 12px; }
+            h4 { font-size: 16px; font-weight: 600; color: #172B4D; margin-top: 20px; margin-bottom: 10px; }
+            code { background-color: #F4F5F7; border: 1px solid #DFE1E6; border-radius: 3px; padding: 2px 6px; font-family: monospace; font-size: 13px; }
+            pre { background-color: #F4F5F7; border: 1px solid #DFE1E6; border-radius: 3px; padding: 12px; margin: 16px 0; font-family: monospace; font-size: 13px; }
+            table { border-collapse: collapse; width: 100%; margin: 16px 0; border: 1px solid #DFE1E6; }
+            th { background-color: #F4F5F7; border: 1px solid #DFE1E6; padding: 8px 12px; font-weight: 600; }
+            td { border: 1px solid #DFE1E6; padding: 8px 12px; }
+        </style>
+        """
+        
+        # Insert styles into HTML head
+        if '<head>' in html_content:
+            html_content = html_content.replace('<head>', f'<head>{inline_styles}')
+        else:
+            html_content = f'<head>{inline_styles}</head>{html_content}'
+        
+        return html_content
     
     def generate_pdf_from_markdown(self, markdown_text: str, filename: str = "technical_documentation.pdf") -> BytesIO:
         """
