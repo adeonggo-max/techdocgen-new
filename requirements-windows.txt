@@ -31,7 +31,9 @@ streamlit-file-browser>=0.1.0
 
 # PDF generation (Windows-compatible)
 markdown>=3.5.1
-xhtml2pdf>=0.2.11  # Windows-compatible PDF generator (no GTK/GObject dependencies)
+xhtml2pdf>=0.2.17  # Windows-compatible PDF generator (no GTK/GObject dependencies)
+# Note: Version 0.2.17+ fixes OpenSSL usedforsecurity compatibility issues
+reportlab>=4.0.0  # Required by xhtml2pdf, newer versions fix OpenSSL issues
 pygments>=2.17.2
 
 # Template engine

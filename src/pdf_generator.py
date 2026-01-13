@@ -1,6 +1,8 @@
 """PDF generator with Confluence-style formatting"""
 
 import re
+import sys
+import hashlib
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -8,6 +10,44 @@ import markdown
 from pygments import highlight
 from pygments.lexers import get_lexer_by_name, TextLexer
 from pygments.formatters import HtmlFormatter
+
+# Fix for usedforsecurity parameter issue with xhtml2pdf/reportlab on newer Python/OpenSSL
+# This patches hashlib functions to handle usedforsecurity parameter compatibility
+def _patch_hashlib_for_xhtml2pdf():
+    """Patch hashlib to handle usedforsecurity parameter compatibility issues"""
+    # Store original functions
+    original_md5 = hashlib.md5
+    original_sha1 = hashlib.sha1
+    original_sha256 = hashlib.sha256
+    original_sha512 = getattr(hashlib, 'sha512', None)
+    
+    def safe_hash_wrapper(original_func):
+        """Wrapper that strips usedforsecurity if it causes errors"""
+        def wrapper(*args, **kwargs):
+            # Try with usedforsecurity if provided
+            if 'usedforsecurity' in kwargs:
+                try:
+                    return original_func(*args, **kwargs)
+                except (TypeError, ValueError) as e:
+                    # If usedforsecurity causes an error, remove it and retry
+                    if 'usedforsecurity' in str(e).lower() or 'openssl' in str(e).lower():
+                        kwargs = kwargs.copy()
+                        kwargs.pop('usedforsecurity', None)
+                        return original_func(*args, **kwargs)
+                    raise
+            else:
+                return original_func(*args, **kwargs)
+        return wrapper
+    
+    # Apply patches
+    hashlib.md5 = safe_hash_wrapper(original_md5)
+    hashlib.sha1 = safe_hash_wrapper(original_sha1)
+    hashlib.sha256 = safe_hash_wrapper(original_sha256)
+    if original_sha512:
+        hashlib.sha512 = safe_hash_wrapper(original_sha512)
+
+# Apply the patch before importing xhtml2pdf to prevent errors during import
+_patch_hashlib_for_xhtml2pdf()
 
 # Try to import WeasyPrint (may fail on Windows)
 try:
@@ -21,8 +61,9 @@ except (ImportError, OSError) as e:
 try:
     from xhtml2pdf import pisa
     XHTML2PDF_AVAILABLE = True
-except ImportError:
+except (ImportError, TypeError) as e:
     XHTML2PDF_AVAILABLE = False
+    XHTML2PDF_ERROR = str(e) if 'ImportError' not in str(type(e)) else None
 
 
 class PDFGenerator:
@@ -407,20 +448,51 @@ class PDFGenerator:
     def _generate_pdf_xhtml2pdf(self, html_content: str, pdf_bytes: BytesIO):
         """Generate PDF using xhtml2pdf (Windows-compatible)"""
         # Convert CSS to inline styles for xhtml2pdf (it has limited CSS support)
-        # For now, we'll use a simplified approach
         html_with_inline_css = self._convert_css_to_inline(html_content)
         
-        # Generate PDF
-        result = pisa.CreatePDF(
-            html_with_inline_css,
-            dest=pdf_bytes,
-            encoding='utf-8'
-        )
-        
-        if result.err:
-            raise RuntimeError(f"PDF generation failed: {result.err}")
-        
-        pdf_bytes.seek(0)
+        try:
+            # Generate PDF
+            result = pisa.CreatePDF(
+                html_with_inline_css,
+                dest=pdf_bytes,
+                encoding='utf-8'
+            )
+            
+            if result.err:
+                raise RuntimeError(f"PDF generation failed: {result.err}")
+            
+            pdf_bytes.seek(0)
+        except TypeError as e:
+            # Handle usedforsecurity error specifically
+            if 'usedforsecurity' in str(e).lower():
+                # Re-apply the patch and retry
+                _patch_hashlib_for_xhtml2pdf()
+                try:
+                    result = pisa.CreatePDF(
+                        html_with_inline_css,
+                        dest=pdf_bytes,
+                        encoding='utf-8'
+                    )
+                    if result.err:
+                        raise RuntimeError(f"PDF generation failed: {result.err}")
+                    pdf_bytes.seek(0)
+                except Exception as retry_error:
+                    raise RuntimeError(
+                        f"PDF generation failed due to OpenSSL compatibility issue. "
+                        f"Error: {retry_error}. "
+                        f"Please try: pip install --upgrade xhtml2pdf reportlab"
+                    )
+            else:
+                raise
+        except Exception as e:
+            error_msg = str(e)
+            if 'usedforsecurity' in error_msg.lower() or 'openssl' in error_msg.lower():
+                raise RuntimeError(
+                    f"PDF generation failed due to OpenSSL compatibility issue. "
+                    f"Please try: pip install --upgrade xhtml2pdf reportlab. "
+                    f"Original error: {error_msg}"
+                )
+            raise
     
     def _convert_css_to_inline(self, html_content: str) -> str:
         """Convert CSS styles to inline styles for xhtml2pdf compatibility"""

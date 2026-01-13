@@ -32,7 +32,9 @@ markdown>=3.5.1
 # the app will automatically use xhtml2pdf as fallback (see requirements-windows.txt)
 weasyprint>=60.1; sys_platform != "win32"
 # xhtml2pdf (Windows-compatible alternative, also installed as fallback)
-xhtml2pdf>=0.2.11
+# Version 0.2.17+ fixes OpenSSL usedforsecurity compatibility issues
+xhtml2pdf>=0.2.17
+reportlab>=4.0.0  # Required by xhtml2pdf, newer versions fix OpenSSL issues
 pygments>=2.17.2
 
 # Template engine

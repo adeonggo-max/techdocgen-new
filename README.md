@@ -294,8 +294,26 @@ This occurs because `weasyprint` requires GTK/GObject libraries that are difficu
 - Consider processing specific folders instead of entire projects
 
 ### PDF Generation Issues
+
+**Error: "usedforsecurity is not a valid keyword argument for OpenSSL"**
+
+This error occurs when using older versions of `xhtml2pdf` or `reportlab` with newer Python/OpenSSL versions. Solution:
+
+1. Upgrade xhtml2pdf and reportlab:
+   ```bash
+   pip install --upgrade xhtml2pdf>=0.2.17 reportlab>=4.0.0
+   ```
+
+2. The code includes an automatic workaround, but if issues persist, reinstall:
+   ```bash
+   pip uninstall xhtml2pdf reportlab
+   pip install xhtml2pdf>=0.2.17 reportlab>=4.0.0
+   ```
+
+**General PDF Generation Issues:**
 - On Windows, the app automatically falls back to `xhtml2pdf` if `weasyprint` is unavailable
 - If PDF generation fails, check that either `weasyprint` (Linux/Mac) or `xhtml2pdf` (Windows) is installed
+- Ensure you're using xhtml2pdf version 0.2.17+ for OpenSSL compatibility
 
 ## License
 
