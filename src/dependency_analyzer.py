@@ -48,11 +48,24 @@ class DependencyAnalyzer:
             "highly_coupled_files": self._find_highly_coupled_files()
         }
     
+    def _normalize_path(self, path_str: str) -> str:
+        """Normalize path to use forward slashes consistently"""
+        if not path_str:
+            return ""
+        # Convert to Path and use as_posix() to normalize separators
+        try:
+            return Path(path_str).as_posix()
+        except:
+            # Fallback: just replace backslashes with forward slashes
+            return str(path_str).replace('\\', '/')
+    
     def _build_index(self, files: List[Dict[str, Any]], parsers: Dict[str, Any]):
         """Build indexes for files, classes, and packages"""
         for file_info in files:
             file_path = file_info.get('path', '')
             relative_path = file_info.get('relative_path', file_path)
+            # Normalize paths to use forward slashes consistently (important for cross-platform compatibility)
+            relative_path = self._normalize_path(relative_path)
             language = file_info.get('language', 'unknown')
             
             if language == 'unknown' or language not in parsers:
@@ -107,6 +120,23 @@ class DependencyAnalyzer:
                             'full_name': full_class_name
                         })
                 
+                # Index interfaces (for C#, Java, etc.)
+                interfaces = parsed.get('interfaces', [])
+                for iface in interfaces:
+                    interface_name = iface.get('name', '')
+                    if interface_name:
+                        full_interface_name = self._get_full_class_name(
+                            interface_name,
+                            package or namespace or '',
+                            language
+                        )
+                        self.class_index[full_interface_name] = relative_path
+                        self.class_index[interface_name] = relative_path  # Also index short name
+                        self.file_index[relative_path]['classes'].append({
+                            'name': interface_name,
+                            'full_name': full_interface_name
+                        })
+                
             except Exception:
                 # Skip files that can't be parsed
                 continue
@@ -129,6 +159,8 @@ class DependencyAnalyzer:
         """Resolve dependencies between files based on imports"""
         for file_info in files:
             file_path = file_info.get('relative_path', file_info.get('path', ''))
+            # Normalize path to ensure consistency
+            file_path = self._normalize_path(file_path)
             language = file_info.get('language', 'unknown')
             
             if file_path not in self.file_index or language not in parsers:
@@ -153,27 +185,40 @@ class DependencyAnalyzer:
                 
                 # Resolve each import
                 for imp in imports:
-                    resolved = self._resolve_import(imp, file_path, language)
-                    if resolved:
-                        if resolved in self.file_index:
-                            self.dependencies[file_path].add(resolved)
+                    resolved_files = self._resolve_import(imp, file_path, language)
+                    if resolved_files:
+                        # resolved_files can be a single file path or a list
+                        if isinstance(resolved_files, list):
+                            for resolved in resolved_files:
+                                # Normalize resolved path
+                                normalized_resolved = self._normalize_path(resolved)
+                                if normalized_resolved in self.file_index:
+                                    self.dependencies[file_path].add(normalized_resolved)
+                                else:
+                                    self.external_dependencies[file_path].add(imp)
                         else:
-                            self.external_dependencies[file_path].add(imp)
+                            # Normalize resolved path
+                            normalized_resolved = self._normalize_path(resolved_files)
+                            if normalized_resolved in self.file_index:
+                                self.dependencies[file_path].add(normalized_resolved)
+                            else:
+                                self.external_dependencies[file_path].add(imp)
             
             except Exception:
                 continue
     
-    def _resolve_import(self, import_stmt: str, source_file: str, language: str) -> Optional[str]:
+    def _resolve_import(self, import_stmt: str, source_file: str, language: str) -> Optional[Any]:
         """
-        Resolve an import statement to a file path
+        Resolve an import statement to a file path or list of file paths
         
         Args:
-            import_stmt: Import statement (e.g., "java.util.List", "System.Collections")
+            import_stmt: Import statement (e.g., "java.util.List", "System.Collections", "MyApp.Models")
             source_file: Path of the file containing the import
             language: Programming language
             
         Returns:
-            Resolved file path or None if not found
+            Resolved file path (str), list of file paths (List[str]), or None if not found
+            Returns a list when multiple files match (e.g., all files in a namespace)
         """
         # Clean import statement
         import_stmt = import_stmt.strip()
@@ -184,27 +229,46 @@ class DependencyAnalyzer:
         
         # Try to find by full class name
         if import_stmt in self.class_index:
-            return self.class_index[import_stmt]
+            resolved = self.class_index[import_stmt]
+            return self._normalize_path(resolved) if resolved else None
         
         # Try to find by class name (last segment)
         if '.' in import_stmt:
             class_name = import_stmt.split('.')[-1]
             if class_name in self.class_index:
-                return self.class_index[class_name]
+                resolved = self.class_index[class_name]
+                return self._normalize_path(resolved) if resolved else None
         
         # Try to find by package/namespace
         if language == 'java':
             # Check if it's a package
             if import_stmt in self.package_index:
-                # Return first file in package (could be improved)
+                # Return all files in package
                 files = self.package_index[import_stmt]
                 if files:
-                    return files[0]
+                    normalized_files = [self._normalize_path(f) for f in files]
+                    return normalized_files if len(normalized_files) > 1 else normalized_files[0]
+        elif language in ['csharp', 'vbnet', 'fsharp']:
+            # Check if it's a namespace
+            if import_stmt in self.package_index:
+                # Return all files in namespace
+                files = self.package_index[import_stmt]
+                if files:
+                    normalized_files = [self._normalize_path(f) for f in files]
+                    return normalized_files if len(normalized_files) > 1 else normalized_files[0]
+            # Also try to match namespace prefixes (e.g., "MyApp.Models" matches "MyApp.Models.User")
+            matched_files = []
+            for namespace, files in self.package_index.items():
+                if namespace.startswith(import_stmt + '.') or namespace == import_stmt:
+                    matched_files.extend(files)
+            if matched_files:
+                normalized_files = [self._normalize_path(f) for f in matched_files]
+                return normalized_files if len(normalized_files) > 1 else normalized_files[0]
         
         # Try partial matching
         for full_name, file_path in self.class_index.items():
             if full_name.endswith(import_stmt) or import_stmt in full_name:
-                return file_path
+                return self._normalize_path(file_path) if file_path else None
         
         return None
     
@@ -372,14 +436,43 @@ class DependencyAnalyzer:
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         
+        def sanitize_node_id(path: str) -> str:
+            """Sanitize path to valid Mermaid node ID"""
+            import re
+            # Replace all non-word characters with underscores
+            node_id = re.sub(r'[^\w]', '_', str(path))
+            # Remove consecutive underscores
+            node_id = re.sub(r'_+', '_', node_id)
+            # Remove leading/trailing underscores
+            node_id = node_id.strip('_')
+            # Ensure it starts with a letter or underscore
+            if node_id and not node_id[0].isalpha() and node_id[0] != '_':
+                node_id = '_' + node_id
+            return node_id[:50] if node_id else 'node'
+        
+        def sanitize_label(text: str) -> str:
+            """Sanitize text for Mermaid node labels"""
+            label = text.replace('\\', '\\\\').replace('"', '\\"')
+            label = label.replace('\n', ' ').replace('\r', ' ')
+            return label[:40] if label else 'file'
+        
         lines = ['graph LR']
         
-        # Add nodes and edges
+        # Add edges with node labels (nodes are auto-created with labels in Mermaid)
+        edges_added = set()
         for source, targets in self.dependencies.items():
-            source_name = Path(source).name
+            source_id = sanitize_node_id(source)
+            source_label = sanitize_label(Path(source).name)
+            
             for target in targets:
-                target_name = Path(target).name
-                lines.append(f'  {source_name.replace(" ", "_")} --> {target_name.replace(" ", "_")}')
+                target_id = sanitize_node_id(target)
+                target_label = sanitize_label(Path(target).name)
+                
+                # Avoid duplicate edges
+                edge_key = f"{source_id}->{target_id}"
+                if edge_key not in edges_added:
+                    lines.append(f'  {source_id}["{source_label}"] --> {target_id}["{target_label}"]')
+                    edges_added.add(edge_key)
         
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write('\n'.join(lines))
@@ -428,12 +521,34 @@ class DependencyAnalyzer:
         lines.append('```mermaid\n')
         lines.append('graph TD\n')
         
-        # Add simplified graph
+        def sanitize_node_id(path: str) -> str:
+            """Sanitize path to valid Mermaid node ID"""
+            import re
+            node_id = re.sub(r'[^\w]', '_', str(path))
+            node_id = re.sub(r'_+', '_', node_id)
+            node_id = node_id.strip('_')
+            if node_id and not node_id[0].isalpha() and node_id[0] != '_':
+                node_id = '_' + node_id
+            return node_id[:50] if node_id else 'node'
+        
+        def sanitize_label(text: str) -> str:
+            """Sanitize text for Mermaid node labels"""
+            label = text.replace('\\', '\\\\').replace('"', '\\"')
+            label = label.replace('\n', ' ').replace('\r', ' ')
+            return label[:40] if label else 'file'
+        
+        # Add simplified graph with proper sanitization
+        edges_added = set()
         for source, targets in list(self.dependencies.items())[:20]:  # Limit for readability
-            source_name = Path(source).name.replace(' ', '_')
+            source_id = sanitize_node_id(source)
+            source_label = sanitize_label(Path(source).name)
             for target in list(targets)[:5]:  # Limit targets per source
-                target_name = Path(target).name.replace(' ', '_')
-                lines.append(f'  {source_name} --> {target_name}\n')
+                target_id = sanitize_node_id(target)
+                target_label = sanitize_label(Path(target).name)
+                edge_key = f"{source_id}->{target_id}"
+                if edge_key not in edges_added:
+                    lines.append(f'  {source_id}["{source_label}"] --> {target_id}["{target_label}"]\n')
+                    edges_added.add(edge_key)
         
         lines.append('```\n')
         

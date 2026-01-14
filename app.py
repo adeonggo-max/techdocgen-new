@@ -227,6 +227,38 @@ def generate_summary(docs: str) -> str:
     
     return summary
 
+def sanitize_mermaid_node_id(path: str) -> str:
+    """
+    Sanitize a file path to create a valid Mermaid node ID.
+    Mermaid node IDs must start with a letter or underscore and can contain letters, numbers, and underscores.
+    """
+    # Convert path to a safe identifier
+    # Replace path separators, dots, spaces, and other special chars with underscores
+    node_id = re.sub(r'[^\w]', '_', str(path))
+    # Remove consecutive underscores
+    node_id = re.sub(r'_+', '_', node_id)
+    # Remove leading/trailing underscores
+    node_id = node_id.strip('_')
+    # Ensure it starts with a letter or underscore (Mermaid requirement)
+    if node_id and not node_id[0].isalpha() and node_id[0] != '_':
+        node_id = '_' + node_id
+    # Limit length to avoid issues
+    return node_id[:50] if node_id else 'node'
+
+
+def sanitize_mermaid_label(text: str) -> str:
+    """
+    Sanitize text for use in Mermaid node labels.
+    Escapes quotes and other special characters that might break Mermaid syntax.
+    """
+    # Escape quotes and backslashes
+    label = text.replace('\\', '\\\\').replace('"', '\\"')
+    # Remove or replace newlines
+    label = label.replace('\n', ' ').replace('\r', ' ')
+    # Limit length
+    return label[:40] if label else 'file'
+
+
 def render_markdown_with_mermaid(content: str):
     """Render markdown content, extracting and rendering Mermaid diagrams separately"""
     # Split content by Mermaid code blocks
@@ -771,27 +803,80 @@ def main():
                 if dep_map and len(dep_map.get('edges', [])) > 0:
                     mermaid_code = "graph TD\n"
                     
-                    # Limit nodes for readability (show top 50 nodes)
-                    nodes_to_show = dep_map['nodes'][:50]
-                    node_ids = {}
-                    for node in nodes_to_show:
-                        node_id = node['path'].replace('/', '_').replace('\\', '_').replace('.', '_').replace(' ', '_')[:30]
-                        node_ids[node['id']] = node_id
+                    # Normalize paths to handle Windows/Unix differences and GitHub paths
+                    def normalize_path(path_str: str) -> str:
+                        """Normalize path string to handle different separators"""
+                        if not path_str:
+                            return ""
+                        # Convert to Path and back to string to normalize separators
+                        try:
+                            # Handle both absolute and relative paths
+                            p = Path(path_str)
+                            # Use as_posix() to normalize to forward slashes
+                            return p.as_posix()
+                        except:
+                            # Fallback: just replace backslashes
+                            return str(path_str).replace('\\', '/')
                     
-                    # Add edges (limit to 100 for performance)
+                    # Build a mapping of all node IDs (normalized) to their sanitized Mermaid IDs
+                    all_node_map = {}
+                    for node in dep_map['nodes']:
+                        # Normalize the path before using it
+                        normalized_id = normalize_path(node['id'])
+                        normalized_path = normalize_path(node['path'])
+                        # Use normalized path for sanitization
+                        node_id = sanitize_mermaid_node_id(normalized_path)
+                        # Map both original and normalized IDs to the sanitized node ID
+                        all_node_map[normalized_id] = node_id
+                        all_node_map[node['id']] = node_id  # Also keep original for backward compatibility
+                        all_node_map[node['path']] = node_id  # Also map by path
+                    
+                    # Collect nodes referenced in edges (limit to 100 edges for performance)
+                    edges_to_show = dep_map['edges'][:100]
+                    referenced_nodes = set()
+                    for edge in edges_to_show:
+                        normalized_source = normalize_path(edge['source'])
+                        normalized_target = normalize_path(edge['target'])
+                        if normalized_source in all_node_map:
+                            referenced_nodes.add(normalized_source)
+                        if normalized_target in all_node_map:
+                            referenced_nodes.add(normalized_target)
+                    
+                    # Build node_ids mapping for referenced nodes
+                    node_ids = {}
+                    for node in dep_map['nodes']:
+                        normalized_id = normalize_path(node['id'])
+                        if normalized_id in referenced_nodes or len(referenced_nodes) == 0:
+                            if normalized_id in all_node_map:
+                                node_ids[normalized_id] = all_node_map[normalized_id]
+                                # Also map original IDs for compatibility
+                                node_ids[node['id']] = all_node_map[normalized_id]
+                    
+                    # Add edges
                     edges_added = set()
-                    for edge in dep_map['edges'][:100]:
-                        source_id = edge['source']
-                        target_id = edge['target']
+                    for edge in edges_to_show:
+                        # Normalize source and target paths
+                        source_id = normalize_path(edge['source'])
+                        target_id = normalize_path(edge['target'])
                         
+                        # Check if both nodes exist in our mapping
                         if source_id in node_ids and target_id in node_ids:
                             source_label = node_ids[source_id]
                             target_label = node_ids[target_id]
                             edge_key = f"{source_label}->{target_label}"
                             
                             if edge_key not in edges_added:
-                                source_name = Path(edge['source']).stem[:20]
-                                target_name = Path(edge['target']).stem[:20]
+                                # Sanitize labels properly - handle both relative and absolute paths
+                                try:
+                                    source_path = Path(edge['source'])
+                                    target_path = Path(edge['target'])
+                                    source_name = sanitize_mermaid_label(source_path.stem if source_path.stem else source_path.name)
+                                    target_name = sanitize_mermaid_label(target_path.stem if target_path.stem else target_path.name)
+                                except:
+                                    # Fallback: use the path string directly
+                                    source_name = sanitize_mermaid_label(str(edge['source']).split('/')[-1].split('\\')[-1])
+                                    target_name = sanitize_mermaid_label(str(edge['target']).split('/')[-1].split('\\')[-1])
+                                
                                 mermaid_code += f'  {source_label}["{source_name}"] --> {target_label}["{target_name}"]\n'
                                 edges_added.add(edge_key)
                     
