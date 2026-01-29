@@ -23,6 +23,10 @@ from .dependency_analyzer import DependencyAnalyzer
 from .template_engine import TemplateEngine
 from .flow_extractors import MassTransitFlowExtractor, AmqplibFlowExtractor, InfraConfigFlowExtractor
 from .streaming_writer import StreamingDocWriter
+from .correlation_analyzer import build_correlation_signals, build_correlation_mermaid
+from .call_graph_analyzer import build_csharp_class_call_graphs
+from .service_catalog import build_service_catalog
+from .app_sequence_diagram import build_app_sequence_diagram
 
 
 class DocumentationGenerator:
@@ -147,7 +151,26 @@ class DocumentationGenerator:
                 }, language)
         
         integration_graph = self._build_integration_graph(integration_records)
-        writer.finalize(integration_graph=integration_graph)
+        message_types = []
+        for record in integration_records:
+            flows = record.get("flows", {})
+            if record.get("source_type") == "masstransit":
+                for msg in flows.get("publishes", []) or []:
+                    message_types.append({"message": msg, "service": record.get("file", "")})
+                for msg in flows.get("sends", []) or []:
+                    message_types.append({"message": msg, "service": record.get("file", "")})
+                for cons in flows.get("consumer_messages", []) or []:
+                    if cons.get("message"):
+                        message_types.append({"message": cons.get("message"), "consumer": cons.get("consumer", "")})
+        app_sequence_diagram = build_app_sequence_diagram(
+            {"controllers": [], "services": [], "interfaces": [], "endpoints": [], "controller_dependencies": {}},
+            messaging_flows,
+            message_types
+        )
+        writer.finalize(
+            integration_graph=integration_graph,
+            app_sequence_diagram=app_sequence_diagram
+        )
         return Path(output_path)
     
     def _generate_docs(self, files: List[Dict[str, Any]], progress_callback=None, template_name: Optional[str] = None, llm_override=None, llm_provider_override: Optional[str] = None, chunk_size_chars: Optional[int] = None, chunk_overlap_chars: Optional[int] = None, parsers_override: Optional[Dict[str, Any]] = None) -> str:
@@ -165,11 +188,16 @@ class DocumentationGenerator:
         # Analyze dependencies if enabled
         dependency_analysis = None
         dependency_map_markdown = None
+        dependency_graph_mermaid = None
         include_dep_map = self.config.config.get("documentation", {}).get("include_dependency_map", False)
-        if include_dep_map and len(files) > 1:
+        include_visualization = self.config.config.get("output", {}).get("include_architecture_diagram", False)
+        if (include_dep_map or include_visualization) and len(files) > 1:
             try:
                 dependency_analysis = self.dependency_analyzer.analyze_files(files, self.parsers)
-                dependency_map_markdown = self.dependency_analyzer.generate_markdown_report()
+                if include_dep_map:
+                    dependency_map_markdown = self.dependency_analyzer.generate_markdown_report()
+                if include_visualization:
+                    dependency_graph_mermaid = self.dependency_analyzer.generate_mermaid_block()
             except Exception as e:
                 # Silently fail dependency analysis - don't break documentation
                 pass
@@ -267,7 +295,8 @@ class DocumentationGenerator:
                         "documentation": llm_doc,
                         "parsed_info": parsed_info,
                         "sequence_diagram": sequence_diagram,
-                        "messaging_flows": processed.get("messaging_flows")
+                        "messaging_flows": processed.get("messaging_flows"),
+                        "call_graphs": processed.get("call_graphs", [])
                     }
                     
                     processed_files_by_language[language].append(processed_file_info)
@@ -282,7 +311,8 @@ class DocumentationGenerator:
                         "relative_path": file_info.get("relative_path", file_info.get("path", "")),
                         "documentation": f"*Error processing file: {error_msg}*\n\n<details><summary>Error Details</summary>\n\n```\n{traceback.format_exc()}\n```\n\n</details>",
                         "parsed_info": {"classes": [], "functions": [], "imports": []},
-                        "sequence_diagram": None
+                        "sequence_diagram": None,
+                        "call_graphs": []
                     }
                     processed_files_by_language[language].append(processed_file_info)
         
@@ -290,6 +320,31 @@ class DocumentationGenerator:
         # Get model name from LLM instance
         model_name = getattr(llm, 'model', '')
         integration_graph = self._build_integration_graph(integration_records)
+        service_catalog = build_service_catalog(
+            files,
+            self.dependency_analyzer if dependency_analysis else None
+        )
+        message_types = []
+        for record in integration_records:
+            flows = record.get("flows", {})
+            if record.get("source_type") == "masstransit":
+                for msg in flows.get("publishes", []) or []:
+                    message_types.append({"message": msg, "service": record.get("file", "")})
+                for msg in flows.get("sends", []) or []:
+                    message_types.append({"message": msg, "service": record.get("file", "")})
+                for cons in flows.get("consumer_messages", []) or []:
+                    if cons.get("message"):
+                        message_types.append({"message": cons.get("message"), "consumer": cons.get("consumer", "")})
+        app_sequence_diagram = build_app_sequence_diagram(
+            service_catalog,
+            messaging_flows,
+            message_types
+        )
+        correlation_signals = build_correlation_signals(
+            files,
+            dependency_analysis["dependency_map"] if dependency_analysis else None
+        )
+        correlation_graph = build_correlation_mermaid(correlation_signals)
         template_context = {
             "llm_provider": llm_provider,
             "model_name": model_name,
@@ -297,9 +352,14 @@ class DocumentationGenerator:
             "total_files": total_files,
             "files_by_language": processed_files_by_language,
             "dependency_map": dependency_map_markdown,
+            "dependency_graph": dependency_graph_mermaid,
             "languages": [lang for lang in processed_files_by_language.keys() if lang != "unknown"],
             "messaging_flows": messaging_flows,
-            "integration_graph": integration_graph
+            "integration_graph": integration_graph,
+            "service_catalog": service_catalog,
+            "app_sequence_diagram": app_sequence_diagram,
+            "correlation_signals": correlation_signals,
+            "correlation_graph": correlation_graph
         }
         
         # Render template
@@ -322,6 +382,12 @@ class DocumentationGenerator:
         """Parse and generate documentation for a single file, with chunking support"""
         content = file_info["content"]
         messaging_flows = self._extract_messaging_flows(content, language)
+        call_graphs = []
+        if language == "csharp":
+            try:
+                call_graphs = build_csharp_class_call_graphs(content)
+            except Exception:
+                call_graphs = []
         
         chunk_size_chars = self.chunk_size_chars if chunk_size_chars is None else chunk_size_chars
         chunk_overlap_chars = self.chunk_overlap_chars if chunk_overlap_chars is None else chunk_overlap_chars
@@ -356,7 +422,8 @@ class DocumentationGenerator:
             "relative_path": file_info.get("relative_path", file_info.get("path", "")),
             "documentation": documentation,
             "parsed_info": merged_info,
-            "messaging_flows": messaging_flows
+            "messaging_flows": messaging_flows,
+            "call_graphs": call_graphs
         }
     
     def _build_parsers(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -439,6 +506,8 @@ class DocumentationGenerator:
         bindings = []
         publishers = []
         consumers = []
+        message_publishers = []
+        message_consumers = []
         
         for record in integration_records:
             flows = record.get("flows", {})
@@ -502,6 +571,22 @@ class DocumentationGenerator:
                             "queue": queue,
                             "service": ", ".join(flow.get("consumers", [])) or file_id
                         })
+                for msg in flows.get("publishes", []) or []:
+                    message_publishers.append({
+                        "message": msg,
+                        "service": file_id
+                    })
+                for msg in flows.get("sends", []) or []:
+                    message_publishers.append({
+                        "message": msg,
+                        "service": file_id
+                    })
+                for cons in flows.get("consumer_messages", []) or []:
+                    if cons.get("message"):
+                        message_consumers.append({
+                            "message": cons.get("message"),
+                            "consumer": cons.get("consumer") or file_id
+                        })
                 for send_ep in flows.get("send_endpoints", []) or []:
                     if isinstance(send_ep, str) and send_ep.startswith("queue:"):
                         queue_name = send_ep.split("queue:", 1)[1]
@@ -510,7 +595,7 @@ class DocumentationGenerator:
                             "queue": queue_name
                         })
         
-        if not (exchanges or queues or bindings or publishers or consumers):
+        if not (exchanges or queues or bindings or publishers or consumers or message_publishers or message_consumers):
             return None
         
         mermaid = ["```mermaid", "graph LR"]
@@ -545,6 +630,27 @@ class DocumentationGenerator:
             queue = cons.get("queue")
             if queue:
                 mermaid.append(f"  Q_{self._safe_id(queue)} --> S_{svc_id}")
+
+        for pub in message_publishers:
+            message = pub.get("message")
+            service = pub.get("service", "unknown")
+            if not message:
+                continue
+            msg_id = self._safe_id(f"MSG_{message}")
+            svc_id = self._safe_id(service)
+            mermaid.append(f'  MSG_{msg_id}["Message: {message}"]')
+            mermaid.append(f"  S_{svc_id} --> MSG_{msg_id}")
+
+        for cons in message_consumers:
+            message = cons.get("message")
+            consumer = cons.get("consumer", "unknown")
+            if not message:
+                continue
+            msg_id = self._safe_id(f"MSG_{message}")
+            cons_id = self._safe_id(consumer)
+            mermaid.append(f'  MSG_{msg_id}["Message: {message}"]')
+            mermaid.append(f'  C_{cons_id}["Consumer: {consumer}"]')
+            mermaid.append(f"  MSG_{msg_id} --> C_{cons_id}")
         
         mermaid.append("```")
         return "\n".join(mermaid)

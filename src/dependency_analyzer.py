@@ -256,14 +256,7 @@ class DependencyAnalyzer:
                 if files:
                     normalized_files = [self._normalize_path(f) for f in files]
                     return normalized_files if len(normalized_files) > 1 else normalized_files[0]
-            # Also try to match namespace prefixes (e.g., "MyApp.Models" matches "MyApp.Models.User")
-            matched_files = []
-            for namespace, files in self.package_index.items():
-                if namespace.startswith(import_stmt + '.') or namespace == import_stmt:
-                    matched_files.extend(files)
-            if matched_files:
-                normalized_files = [self._normalize_path(f) for f in matched_files]
-                return normalized_files if len(normalized_files) > 1 else normalized_files[0]
+            # Avoid prefix matching to reduce false dependencies
         
         # Try partial matching
         for full_name, file_path in self.class_index.items():
@@ -478,6 +471,49 @@ class DependencyAnalyzer:
             f.write('\n'.join(lines))
         
         return output_file
+
+    def generate_mermaid_block(self, max_edges: int = 80) -> str:
+        """Generate a Mermaid code block for dependency visualization"""
+        lines = ["```mermaid", "graph LR"]
+        edges_added = set()
+        edge_count = 0
+
+        for source, targets in self.dependencies.items():
+            source_id = self._sanitize_node_id(source)
+            source_label = self._sanitize_label(Path(source).name)
+
+            for target in targets:
+                if edge_count >= max_edges:
+                    break
+                target_id = self._sanitize_node_id(target)
+                target_label = self._sanitize_label(Path(target).name)
+                edge_key = f"{source_id}->{target_id}"
+                if edge_key in edges_added:
+                    continue
+                lines.append(f'  {source_id}["{source_label}"] --> {target_id}["{target_label}"]')
+                edges_added.add(edge_key)
+                edge_count += 1
+            if edge_count >= max_edges:
+                break
+
+        lines.append("```")
+        return "\n".join(lines) if edge_count else ""
+
+    def _sanitize_node_id(self, path: str) -> str:
+        """Sanitize path to valid Mermaid node ID"""
+        import re
+        node_id = re.sub(r"[^\w]", "_", str(path))
+        node_id = re.sub(r"_+", "_", node_id)
+        node_id = node_id.strip("_")
+        if node_id and not node_id[0].isalpha() and node_id[0] != "_":
+            node_id = "_" + node_id
+        return node_id[:50] if node_id else "node"
+
+    def _sanitize_label(self, text: str) -> str:
+        """Sanitize text for Mermaid node labels"""
+        label = text.replace("\\", "\\\\").replace('"', '\\"')
+        label = label.replace("\n", " ").replace("\r", " ")
+        return label[:40] if label else "file"
     
     def generate_markdown_report(self) -> str:
         """Generate a markdown report of the dependency analysis"""

@@ -8,7 +8,7 @@ import os
 import sys
 import re
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import tempfile
 import shutil
 import requests
@@ -27,6 +27,7 @@ try:
     from src.generator import DocumentationGenerator
     from src.config import Config
     from src.pdf_generator import PDFGenerator
+    from src.correlation_analyzer import build_correlation_signals
 except ImportError as e:
     st.error(f"Import error: {e}. Make sure all dependencies are installed.")
     st.stop()
@@ -279,13 +280,7 @@ def render_markdown_with_mermaid(content: str):
             # Render Mermaid diagram as SVG
             if MERMAID_AVAILABLE:
                 try:
-                    # Validate basic syntax before rendering
-                    if 'sequenceDiagram' in diagram_code and 'participant' in diagram_code:
-                        stmd.st_mermaid(diagram_code)
-                    else:
-                        # If syntax looks invalid, show as code
-                        st.warning("⚠️ Diagram syntax validation failed, showing as code:")
-                        st.code(diagram_code, language="mermaid")
+                    stmd.st_mermaid(diagram_code)
                 except Exception as e:
                     # Show error and fallback to code block
                     st.warning(f"⚠️ Could not render diagram: {str(e)}")
@@ -402,7 +397,7 @@ def main():
             include_imports = st.checkbox("Include Imports", value=True)
     
     # Main content area
-    tab1, tab2, tab3, tab4 = st.tabs(["📁 Source Selection", "⚡ Generate", "📄 Preview", "🔗 Dependency Map"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📁 Source Selection", "⚡ Generate", "📄 Preview", "🔗 Correlation & Dependencies"])
     
     with tab1:
         st.markdown("### Select Source Code")
@@ -667,27 +662,36 @@ def main():
                 )
             
             with col2:
-                # Generate PDF on demand
+                pdf_error = None
                 if 'pdf_generator' not in st.session_state:
-                    st.session_state.pdf_generator = PDFGenerator()
+                    try:
+                        st.session_state.pdf_generator = PDFGenerator()
+                    except Exception as e:
+                        pdf_error = e
                 
-                try:
-                    pdf_bytes = st.session_state.pdf_generator.generate_pdf_from_markdown(
-                        st.session_state.generated_docs
-                    )
-                    st.download_button(
-                        label="📄 Download PDF (Confluence Style)",
-                        data=pdf_bytes.getvalue(),
-                        file_name=pdf_filename,
-                        mime="application/pdf",
-                        use_container_width=True
-                    )
-                except Exception as e:
-                    st.error(f"❌ PDF generation failed: {str(e)}")
-                    st.info("💡 Make sure all dependencies are installed: `pip install -r requirements.txt`")
+                if pdf_error:
+                    st.warning("⚠️ PDF generation is unavailable in this environment.")
+                    st.info("💡 Install dependencies: `pip install -r requirements.txt`")
                     with st.expander("🔍 Error Details"):
-                        import traceback
-                        st.code(traceback.format_exc())
+                        st.code(str(pdf_error))
+                else:
+                    try:
+                        pdf_bytes = st.session_state.pdf_generator.generate_pdf_from_markdown(
+                            st.session_state.generated_docs
+                        )
+                        st.download_button(
+                            label="📄 Download PDF (Confluence Style)",
+                            data=pdf_bytes.getvalue(),
+                            file_name=pdf_filename,
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"❌ PDF generation failed: {str(e)}")
+                        st.info("💡 Make sure all dependencies are installed: `pip install -r requirements.txt`")
+                        with st.expander("🔍 Error Details"):
+                            import traceback
+                            st.code(traceback.format_exc())
             
             st.markdown("---")
             
@@ -700,7 +704,7 @@ def main():
             st.info("👆 Generate documentation first to see preview here.")
     
     with tab4:
-        st.markdown("### 🔗 Dependency Map Analysis")
+        st.markdown("### 🔗 Correlation & Dependency Analysis")
         
         if st.session_state.source_files and len(st.session_state.source_files) > 0:
             col1, col2 = st.columns([3, 1])
@@ -782,6 +786,48 @@ def main():
                 analysis = st.session_state.dependency_analysis
                 dep_map = st.session_state.dependency_map_data
                 
+                # Correlation Focus
+                st.markdown("#### 🔍 Cross-Stack Correlation (C#/.NET, RabbitMQ/MassTransit, Node.js, Angular)")
+                correlation = build_correlation_signals(st.session_state.source_files, dep_map)
+                csharp_messaging = correlation.get("csharp_messaging", [])
+                node_messaging = correlation.get("node_messaging", [])
+                angular_files = correlation.get("angular_files", [])
+                cross_stack = "Detected" if csharp_messaging and node_messaging else "Not detected"
+
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric(".NET Messaging Files", len(csharp_messaging))
+                with col2:
+                    st.metric("Node.js Messaging Files", len(node_messaging))
+                with col3:
+                    st.metric("Angular Files", len(angular_files))
+                with col4:
+                    st.metric("Cross-Stack Signal", cross_stack)
+
+                if csharp_messaging:
+                    with st.expander("View .NET RabbitMQ/MassTransit signals"):
+                        for item in csharp_messaging[:25]:
+                            match_text = ", ".join(item.get("matches", []))
+                            st.text(f"• {item['file']} ({match_text})")
+
+                if node_messaging:
+                    with st.expander("View Node.js RabbitMQ signals"):
+                        for item in node_messaging[:25]:
+                            match_text = ", ".join(item.get("matches", []))
+                            st.text(f"• {item['file']} ({match_text})")
+
+                if angular_files:
+                    with st.expander("View Angular files detected"):
+                        for item in angular_files[:25]:
+                            st.text(f"• {item['file']}")
+
+                st.caption(
+                    "Signals are inferred from imports/usings and file paths. "
+                    "Review the file lists to confirm actual integrations."
+                )
+
+                st.markdown("---")
+
                 # Metrics
                 st.markdown("#### 📊 Analysis Metrics")
                 col1, col2, col3, col4 = st.columns(4)

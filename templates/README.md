@@ -31,6 +31,13 @@ Templates receive the following variables:
 - `total_files`: Total number of files processed
 - `files_by_language`: Dictionary grouping files by programming language
 - `dependency_map`: Markdown string of dependency map (if enabled)
+- `dependency_graph`: Mermaid dependency graph (if enabled)
+- `correlation_signals`: Correlation counts and file lists
+- `correlation_graph`: Mermaid correlation graph (if detected)
+- `integration_graph`: Mermaid integration graph (if detected)
+- `service_catalog`: Controllers/services/endpoints catalog
+- `service_catalog.endpoint_flows`: Per-endpoint flow steps
+- `app_sequence_diagram`: High-level app interaction sequence diagram
 - `languages`: List of languages found
 
 For each file:
@@ -40,6 +47,7 @@ For each file:
 - `file_info.documentation`: LLM-generated documentation
 - `file_info.parsed_info`: Parsed code structure (classes, methods, functions, etc.)
 - `file_info.sequence_diagram`: Sequence diagram (if generated)
+- `file_info.call_graphs`: Intra-class call graphs (if detected)
 
 ## Using Custom Templates
 

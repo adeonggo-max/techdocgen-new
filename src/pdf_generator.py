@@ -3,6 +3,8 @@
 import re
 import sys
 import hashlib
+import base64
+import requests
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -276,6 +278,7 @@ class PDFGenerator:
         margin: 16px 0;
         border-radius: 3px;
     }
+
     
     strong {
         font-weight: 600;
@@ -366,6 +369,38 @@ class PDFGenerator:
         )
         
         return markdown_text
+
+    def _render_mermaid_blocks(self, markdown_text: str) -> str:
+        """Replace Mermaid code blocks with rendered images for PDF output."""
+        pattern = r"```mermaid\s*(.*?)```"
+
+        def replace_block(match):
+            diagram_code = match.group(1).strip()
+            if not diagram_code:
+                return match.group(0)
+            image_src = self._mermaid_to_png_data_uri(diagram_code)
+            if not image_src:
+                return match.group(0)
+            return f'<div class="mermaid-diagram"><img src="{image_src}" alt="Mermaid diagram"/></div>'
+
+        return re.sub(pattern, replace_block, markdown_text, flags=re.DOTALL)
+
+    def _mermaid_to_png_data_uri(self, diagram_code: str) -> Optional[str]:
+        """Render Mermaid to PNG using Kroki and return data URI."""
+        kroki_url = "https://kroki.io/mermaid/png"
+        try:
+            response = requests.post(
+                kroki_url,
+                data=diagram_code.encode("utf-8"),
+                headers={"Content-Type": "text/plain"},
+                timeout=10
+            )
+            if response.status_code != 200:
+                return None
+            b64 = base64.b64encode(response.content).decode("ascii")
+            return f"data:image/png;base64,{b64}"
+        except Exception:
+            return None
     
     def markdown_to_pdf(self, markdown_text: str, output_path: Optional[str] = None) -> BytesIO:
         """
@@ -378,8 +413,9 @@ class PDFGenerator:
         Returns:
             BytesIO object containing PDF data
         """
-        # Process markdown extensions
+        # Process markdown extensions and render Mermaid diagrams for PDF
         processed_markdown = self._process_markdown_extensions(markdown_text)
+        processed_markdown = self._render_mermaid_blocks(processed_markdown)
         
         # Convert markdown to HTML
         md = markdown.Markdown(extensions=[

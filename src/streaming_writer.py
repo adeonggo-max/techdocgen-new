@@ -65,16 +65,30 @@ class StreamingDocWriter:
                 self.file.write(f"- Sends: {', '.join(messaging['sends'])}\n")
             if messaging.get("send_endpoints"):
                 self.file.write(f"- Send Endpoints: {', '.join(messaging['send_endpoints'])}\n")
+            if messaging.get("consumer_messages"):
+                entries = [f"{item.get('consumer')}({item.get('message')})" for item in messaging["consumer_messages"]]
+                if entries:
+                    self.file.write(f"- Consumers: {', '.join(entries)}\n")
             self.file.write("\n")
         
         if file_info.get("sequence_diagram"):
             self.file.write("#### Sequence Diagram\n\n")
             self.file.write(file_info["sequence_diagram"] + "\n\n")
+
+        call_graphs = file_info.get("call_graphs") or []
+        if call_graphs:
+            self.file.write("#### Call Graphs\n\n")
+            for graph in call_graphs:
+                self.file.write(f"##### {graph.get('class')}\n\n")
+                self.file.write(graph.get("mermaid", "") + "\n\n")
         
         self.file.write("---\n\n")
     
-    def finalize(self, integration_graph: Optional[str] = None):
+    def finalize(self, integration_graph: Optional[str] = None, app_sequence_diagram: Optional[str] = None):
         """Finalize the document with summary"""
+        if app_sequence_diagram:
+            self.file.write("## App Interaction Sequence\n\n")
+            self.file.write(app_sequence_diagram.strip() + "\n\n")
         if integration_graph:
             self.file.write("## Integration Graph\n\n")
             self.file.write(integration_graph.strip() + "\n\n")

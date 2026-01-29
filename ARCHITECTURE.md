@@ -19,15 +19,19 @@
 
 ## Overview
 
-**TechDocGen by IBMC** is a comprehensive technical documentation generator that automatically creates high-quality documentation from source code using Large Language Models (LLMs). The system supports multiple programming languages (Java, C#, VB.NET, F#, PHP), multiple LLM providers (OpenAI, Anthropic, Ollama, MCP), and can process source code from files, folders, or Git repositories.
+**TechDocGen by IBMC** is a comprehensive technical documentation generator that automatically creates high-quality documentation from source code using Large Language Models (LLMs). The system supports multiple programming languages (Java, C#, VB.NET, F#, PHP), multiple LLM providers (Ollama, MCP), and can process source code from files, folders, or Git repositories.
 
 ### Key Capabilities
 - **Multi-Language Support**: Java, .NET (C#, VB.NET, F#), PHP
 - **Multiple Source Types**: Single files, folders, Git repositories
-- **LLM Integration**: OpenAI, Anthropic, Ollama, MCP
+- **LLM Integration**: Ollama, MCP
 - **Intelligent Parsing**: Tree-sitter based parsing with language-specific parsers
 - **Dependency Analysis**: Automatic dependency mapping and circular dependency detection
+- **Correlation & Integration**: Cross-stack correlation signals and messaging integration graphs
+- **Service Catalog**: Controllers, endpoints, services, and interface inventory
+- **Call Graphs**: Intra-class method call visualization
 - **Multiple Output Formats**: Markdown, PDF (Confluence-style)
+- **Diagram Rendering**: Mermaid diagrams rendered in UI and PDF
 - **Web UI & CLI**: Dual interface support
 
 ---
@@ -60,8 +64,8 @@
         │                     │                     │
 ┌───────▼────────┐   ┌────────▼────────┐  ┌────────▼────────┐
 │   Readers      │   │    Parsers      │  │  LLM Providers  │
-│  (File/Folder/ │   │ (Java/C#/VB/   │  │ (OpenAI/Anthropic│
-│     Git)       │   │   F#/PHP)      │  │  Ollama/MCP)    │
+│  (File/Folder/ │   │ (Java/C#/VB/   │  │   (Ollama/MCP)  │
+│     Git)       │   │   F#/PHP)      │  │                │
 └────────────────┘   └─────────────────┘  └─────────────────┘
         │                     │                     │
         └─────────────────────┼─────────────────────┘
@@ -81,6 +85,10 @@
 2. **Business Logic Layer**
    - Documentation Generator (`src/generator.py`)
    - Dependency Analyzer (`src/dependency_analyzer.py`)
+   - Correlation Analyzer (`src/correlation_analyzer.py`)
+   - Service Catalog (`src/service_catalog.py`)
+   - Call Graph Analyzer (`src/call_graph_analyzer.py`)
+   - App Interaction Sequence (`src/app_sequence_diagram.py`)
    - Sequence Diagram Generator (`src/sequence_diagram.py`)
 
 3. **Data Access Layer**
@@ -179,8 +187,6 @@
 
 **Components**:
 - `BaseLLM` - Abstract base class defining LLM interface
-- `OpenAILLM` - OpenAI API integration
-- `AnthropicLLM` - Anthropic Claude API integration
 - `OllamaLLM` - Local Ollama integration
 - `MCPLLM` - Model Context Protocol integration
 - `LLMFactory` - Factory for creating LLM instances
@@ -202,6 +208,7 @@
 - Identify orphaned files
 - Find highly coupled components
 - Export in multiple formats (JSON, DOT, Mermaid, Markdown)
+- Generate Mermaid blocks for visualizations
 
 **Output Formats**:
 - JSON - Machine-readable dependency data
@@ -227,8 +234,9 @@
 - Table of contents
 - Page numbering
 - Professional formatting
+- Mermaid diagrams rendered as images (Kroki)
 
-**Technology**: WeasyPrint for PDF generation, Pygments for syntax highlighting
+**Technology**: WeasyPrint for PDF generation, Pygments for syntax highlighting, Kroki for Mermaid rendering
 
 ---
 
@@ -270,6 +278,9 @@
 6. Aggregation Phase
    ├─ Combine all file documentation
    ├─ Add dependency maps
+   ├─ Add correlation/integration graphs
+   ├─ Add service catalog and call graphs
+   ├─ Add app interaction sequence
    ├─ Add sequence diagrams
    └─ Generate final Markdown
 
@@ -343,8 +354,6 @@
 
 ### LLM Integration Libraries
 
-- **openai** - OpenAI API client
-- **anthropic** - Anthropic API client
 - **ollama** - Ollama client for local LLMs
 
 ### Development Tools
@@ -494,7 +503,7 @@ Streamlit App (app.py)
     │   ├── Download Buttons
     │   └── Documentation Preview
     │
-    └── Tab 4: Dependency Map
+    └── Tab 4: Correlation & Dependencies
         ├── Analysis Button
         ├── Metrics Display
         ├── Visual Dependency Graph
@@ -680,8 +689,7 @@ networks:
 │                                                           │
 │  ┌────────────────────────────────────────────────────┐  │
 │  │         External Services                          │  │
-│  │         - OpenAI API                               │  │
-│  │         - Anthropic API                            │  │
+│  │         - LLM APIs (MCP providers)                 │  │
 │  │         - Git Providers (GitHub, GitLab, etc.)      │  │
 │  └────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
@@ -778,8 +786,7 @@ networks:
 │                          │                                 │
 │  ┌───────────────────────▼─────────────────────────────┐ │
 │  │         External LLM APIs                           │ │
-│  │         - OpenAI                                    │ │
-│  │         - Anthropic                                 │ │
+│  │         - MCP providers                             │ │
 │  └─────────────────────────────────────────────────────┘ │
 │                                                           │
 │  ┌───────────────────────────────────────────────────┐ │
@@ -1106,11 +1113,10 @@ Storage Structure:
 │        ┌─────────────────┼─────────────────┐             │
 │        │                 │                 │               │
 │  ┌─────▼─────┐   ┌───────▼──────┐  ┌──────▼──────┐       │
-│  │ OpenAI    │   │ Anthropic    │  │ Ollama      │       │
-│  │ LLM       │   │ LLM          │  │ LLM         │       │
-│  │           │   │              │  │            │       │
-│  │ - GPT-4   │   │ - Claude     │  │ - Local    │       │
-│  │ - GPT-3.5 │   │ - Sonnet     │  │ - Models   │       │
+│  │ Ollama    │   │ MCP          │  │ Providers   │       │
+│  │ LLM       │   │ LLM          │  │ (Extensible)│       │
+│  │ - Local   │   │ - MCP Server │  │            │       │
+│  │ - Models  │   │ - Remote     │  │            │       │
 │  └─────┬─────┘   └──────┬────────┘  └─────┬──────┘       │
 │        │               │                  │               │
 │        └───────────────┼──────────────────┘             │
@@ -1548,7 +1554,7 @@ The dual interface (Web UI and CLI) makes it accessible to both technical and no
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: January 2025  
+**Document Version**: 1.1  
+**Last Updated**: January 2026  
 **Product**: TechDocGen by IBMC  
 **Author**: IBMC Development Team
