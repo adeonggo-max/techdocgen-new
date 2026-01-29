@@ -30,10 +30,15 @@ streamlit-option-menu>=0.3.6
 streamlit-file-browser>=0.1.0
 streamlit-mermaid>=0.0.4  # Mermaid diagram rendering
 
-# PDF generation (Windows-compatible)
+# PDF generation
 markdown>=3.5.1
-xhtml2pdf>=0.2.17  # Windows-compatible PDF generator (no GTK/GObject dependencies)
-# Note: Version 0.2.17+ fixes OpenSSL usedforsecurity compatibility issues
+# WeasyPrint (Linux/Mac - preferred, better CSS support)
+# Note: On Windows, if weasyprint installation fails with gobject-2-0-0 errors,
+# the app will automatically use xhtml2pdf as fallback (see requirements-windows.txt)
+# weasyprint>=60.1; sys_platform != "win32"
+# xhtml2pdf (Windows-compatible alternative, also installed as fallback)
+# Version 0.2.17+ fixes OpenSSL usedforsecurity compatibility issues
+xhtml2pdf>=0.2.17
 reportlab>=4.0.0  # Required by xhtml2pdf, newer versions fix OpenSSL issues
 pygments>=2.17.2
 
