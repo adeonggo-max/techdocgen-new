@@ -279,6 +279,19 @@ class PDFGenerator:
         border-radius: 3px;
     }
 
+    .mermaid-diagram {
+        width: 100%;
+        max-width: 100%;
+        margin: 16px 0;
+        page-break-inside: avoid;
+    }
+
+    .mermaid-diagram img {
+        display: block;
+        max-width: 100%;
+        height: auto;
+    }
+
     
     strong {
         font-weight: 600;
@@ -381,7 +394,12 @@ class PDFGenerator:
             image_src = self._mermaid_to_png_data_uri(diagram_code)
             if not image_src:
                 return match.group(0)
-            return f'<div class="mermaid-diagram"><img src="{image_src}" alt="Mermaid diagram"/></div>'
+            return (
+                '<div class="mermaid-diagram">'
+                f'<img src="{image_src}" alt="Mermaid diagram" '
+                'style="max-width:100%; height:auto; display:block;"/>'
+                '</div>'
+            )
 
         return re.sub(pattern, replace_block, markdown_text, flags=re.DOTALL)
 
@@ -546,6 +564,8 @@ class PDFGenerator:
             table { border-collapse: collapse; width: 100%; margin: 16px 0; border: 1px solid #DFE1E6; }
             th { background-color: #F4F5F7; border: 1px solid #DFE1E6; padding: 8px 12px; font-weight: 600; }
             td { border: 1px solid #DFE1E6; padding: 8px 12px; }
+            .mermaid-diagram { width: 100%; max-width: 100%; margin: 16px 0; }
+            .mermaid-diagram img { display: block; max-width: 100%; height: auto; }
         </style>
         """
         

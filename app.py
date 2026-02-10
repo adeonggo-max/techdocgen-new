@@ -263,6 +263,56 @@ def sanitize_mermaid_label(text: str) -> str:
 
 def render_markdown_with_mermaid(content: str):
     """Render markdown content, extracting and rendering Mermaid diagrams separately"""
+    def _clean_mermaid_code(raw: str) -> str:
+        """Normalize Mermaid code to avoid client-side parser errors."""
+        if not raw:
+            return ""
+        # Normalize newlines and strip BOM/zero-width chars
+        code = raw.replace("\r\n", "\n").replace("\r", "\n")
+        code = re.sub(r'[\u200B-\u200D\uFEFF]', '', code)
+        # Remove code fences if still present
+        code = re.sub(r'^\s*```mermaid\s*', '', code)
+        code = re.sub(r'^\s*```\s*$', '', code, flags=re.MULTILINE)
+        code = re.sub(r'\s*```\s*$', '', code)
+        # Normalize indentation
+        code = textwrap.dedent(code).strip()
+        if not code:
+            return ""
+        # Drop leading non-mermaid lines (e.g., stray markdown)
+        valid_starts = (
+            "sequenceDiagram",
+            "graph",
+            "flowchart",
+            "classDiagram",
+            "stateDiagram",
+            "stateDiagram-v2",
+            "erDiagram",
+            "journey",
+            "gantt",
+            "pie",
+            "mindmap",
+            "timeline",
+            "quadrantChart",
+            "C4Context",
+            "C4Container",
+            "C4Component",
+            "C4Dynamic",
+            "requirementDiagram",
+            "gitGraph",
+            "sankey-beta",
+            "xychart-beta",
+            "block-beta",
+        )
+        lines = [line.rstrip() for line in code.split("\n")]
+        # Remove leading empty lines
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        # Remove any leading garbage lines before a valid directive
+        for i, line in enumerate(lines):
+            if line.strip().startswith(valid_starts):
+                lines = lines[i:]
+                break
+        return "\n".join(lines).strip()
     # Split content by Mermaid code blocks
     pattern = r'(```mermaid.*?```)'
     parts = re.split(pattern, content, flags=re.DOTALL)
@@ -272,18 +322,15 @@ def render_markdown_with_mermaid(content: str):
             # Extract Mermaid diagram code
             diagram_code = re.sub(r'```mermaid\s*', '', part)
             diagram_code = re.sub(r'```\s*$', '', diagram_code, flags=re.MULTILINE)
-            # Clean up: remove leading/trailing whitespace and normalize line endings
-            diagram_code = diagram_code.strip()
-            # Normalize indentation for Mermaid parser
-            diagram_code = textwrap.dedent(diagram_code).strip()
-            # Remove any empty lines at start/end
-            lines = [line for line in diagram_code.split('\n') if line.strip() or len([l for l in diagram_code.split('\n') if l.strip()]) > 0]
-            diagram_code = '\n'.join(lines).strip()
+            diagram_code = _clean_mermaid_code(diagram_code)
             
             # Render Mermaid diagram as SVG
             if MERMAID_AVAILABLE:
                 try:
-                    stmd.st_mermaid(diagram_code)
+                    if diagram_code:
+                        stmd.st_mermaid(diagram_code)
+                    else:
+                        raise ValueError("Empty Mermaid diagram after normalization")
                 except Exception as e:
                     # Show error and fallback to code block
                     st.warning(f"⚠️ Could not render diagram: {str(e)}")
