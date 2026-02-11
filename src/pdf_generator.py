@@ -183,29 +183,20 @@ class PDFGenerator:
         padding: 12px;
         margin: 16px 0;
         overflow-x: auto;
-        white-space: pre-wrap;
-        word-break: break-word;
-        overflow-wrap: anywhere;
         font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
         font-size: 13px;
         line-height: 1.5;
     }
-
+    
     pre code {
         background-color: transparent;
         border: none;
         padding: 0;
         color: #172B4D;
-        white-space: inherit;
-        word-break: inherit;
-        overflow-wrap: inherit;
     }
     
     pre code span {
         color: inherit;
-        white-space: inherit;
-        word-break: inherit;
-        overflow-wrap: inherit;
     }
     
     blockquote {
@@ -569,9 +560,7 @@ class PDFGenerator:
             h3 { font-size: 20px; font-weight: 600; color: #172B4D; margin-top: 24px; margin-bottom: 12px; }
             h4 { font-size: 16px; font-weight: 600; color: #172B4D; margin-top: 20px; margin-bottom: 10px; }
             code { background-color: #F4F5F7; border: 1px solid #DFE1E6; border-radius: 3px; padding: 2px 6px; font-family: monospace; font-size: 13px; }
-            pre { background-color: #F4F5F7; border: 1px solid #DFE1E6; border-radius: 3px; padding: 12px; margin: 16px 0; font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
-            pre code { white-space: inherit; word-break: inherit; overflow-wrap: inherit; }
-            pre code span { white-space: inherit; word-break: inherit; overflow-wrap: inherit; }
+            pre { background-color: #F4F5F7; border: 1px solid #DFE1E6; border-radius: 3px; padding: 12px; margin: 16px 0; font-family: monospace; font-size: 13px; }
             table { border-collapse: collapse; width: 100%; margin: 16px 0; border: 1px solid #DFE1E6; }
             th { background-color: #F4F5F7; border: 1px solid #DFE1E6; padding: 8px 12px; font-weight: 600; }
             td { border: 1px solid #DFE1E6; padding: 8px 12px; }
