@@ -171,6 +171,7 @@ def _build_endpoint_flows(
                 "http_verbs": endpoint.get("http_verbs", []),
                 "route": endpoint.get("route", ""),
                 "steps": steps,
+                "messages": messages,
             }
         )
     return flows
@@ -247,21 +248,75 @@ def _render_endpoint_sequence(
     request_label: str,
     steps: List[str],
 ) -> str:
+    messages = _extract_message_names(steps)
+    consumers = _extract_consumers(steps)
+    has_db_activity = _has_db_activity(steps)
+    has_queue_activity = bool(messages) or any("queue" in step.lower() for step in steps)
+    remaining_steps = _extract_remaining_notes(steps)
+
     lines = ["```mermaid", "sequenceDiagram", "  participant Client"]
+    added_participants = {"Client"}
+
+    def add_participant(participant_id: str, label: Optional[str] = None) -> None:
+        if participant_id in added_participants:
+            return
+        added_participants.add(participant_id)
+        if label:
+            lines.append(f"  participant {participant_id} as {label}")
+            return
+        lines.append(f"  participant {participant_id}")
+
     if controller:
-        lines.append(f"  participant {_safe_id(controller)}")
+        add_participant(_safe_id(controller), controller)
     for dep in dependencies:
-        lines.append(f"  participant {_safe_id(dep)}")
+        add_participant(_safe_id(dep), dep)
+    if has_db_activity:
+        add_participant("Database")
+    if has_queue_activity:
+        add_participant("MessageBroker")
+    for consumer in consumers:
+        add_participant(_safe_id(consumer), consumer)
     if controller:
         lines.append(f"  Client->>{_safe_id(controller)}: {request_label}")
+        lines.append(f"  activate {_safe_id(controller)}")
         for dep in dependencies:
-            lines.append(f"  {_safe_id(controller)}->>{_safe_id(dep)}: Call")
+            action = _infer_dependency_action(dep, has_db_activity, has_queue_activity, messages)
+            lines.append(f"  {_safe_id(controller)}->>{_safe_id(dep)}: {action}")
+            lines.append(f"  activate {_safe_id(dep)}")
+            if has_db_activity and _is_db_component(dep):
+                lines.append(f"  {_safe_id(dep)}->>Database: Read/Write data")
+                lines.append(f"  Database-->>{_safe_id(dep)}: Data/ACK")
+            if has_queue_activity and _is_messaging_component(dep):
+                publish_label = f"Publish {', '.join(messages)}" if messages else "Publish event/message"
+                lines.append(f"  {_safe_id(dep)}->>MessageBroker: {publish_label}")
+                lines.append(f"  MessageBroker-->>{_safe_id(dep)}: Ack")
             lines.append(f"  {_safe_id(dep)}-->>{_safe_id(controller)}: Result")
-        if steps:
-            note = " | ".join(step for step in steps if step)
-            if note:
-                lines.append(f"  Note over {_safe_id(controller)}: {note}")
+            lines.append(f"  deactivate {_safe_id(dep)}")
+
+        if not dependencies and has_db_activity:
+            lines.append(f"  {_safe_id(controller)}->>Database: Read/Write data")
+            lines.append(f"  Database-->>{_safe_id(controller)}: Data/ACK")
+        if not dependencies and has_queue_activity:
+            publish_label = f"Publish {', '.join(messages)}" if messages else "Publish event/message"
+            lines.append(f"  {_safe_id(controller)}->>MessageBroker: {publish_label}")
+            lines.append(f"  MessageBroker-->>{_safe_id(controller)}: Ack")
+
+        for consumer in consumers:
+            deliver_label = f"Deliver {', '.join(messages)}" if messages else "Deliver event/message"
+            lines.append(f"  MessageBroker->>{_safe_id(consumer)}: {deliver_label}")
+            lines.append(f"  activate {_safe_id(consumer)}")
+            if _consumer_reads_db(consumer, steps):
+                lines.append(f"  {_safe_id(consumer)}->>Database: Read/Write data")
+                lines.append(f"  Database-->>{_safe_id(consumer)}: Data/ACK")
+            lines.append(f"  {_safe_id(consumer)}-->>MessageBroker: Ack")
+            lines.append(f"  deactivate {_safe_id(consumer)}")
+
+        if remaining_steps:
+            lines.append(
+                f"  Note over {_safe_id(controller)}: {' | '.join(remaining_steps)}"
+            )
         lines.append(f"  {_safe_id(controller)}-->>Client: Response")
+        lines.append(f"  deactivate {_safe_id(controller)}")
     else:
         lines.append("  Client->>Service: Request")
         lines.append("  Service-->>Client: Response")
@@ -405,6 +460,86 @@ def _build_controller_flow_graph(
 
 def _safe_id(value: str) -> str:
     return re.sub(r"[^\w]", "_", value)[:50] or "node"
+
+
+def _extract_message_names(steps: List[str]) -> List[str]:
+    names = []
+    for step in steps:
+        match = re.search(r"Publish/Send\s+([\w\.]+)\s+to queue", step or "", re.IGNORECASE)
+        if not match:
+            continue
+        name = match.group(1)
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def _extract_consumers(steps: List[str]) -> List[str]:
+    consumers = []
+    for step in steps:
+        match = re.search(r"Consumer\s+([\w\.]+)\s+reads queue", step or "", re.IGNORECASE)
+        if not match:
+            continue
+        consumer = match.group(1)
+        if consumer and consumer not in consumers:
+            consumers.append(consumer)
+    return consumers
+
+
+def _consumer_reads_db(consumer: str, steps: List[str]) -> bool:
+    pattern = re.compile(
+        rf"Consumer\s+{re.escape(consumer)}\s+reads DB",
+        re.IGNORECASE,
+    )
+    return any(pattern.search(step or "") for step in steps)
+
+
+def _has_db_activity(steps: List[str]) -> bool:
+    return any("db" in (step or "").lower() for step in steps)
+
+
+def _is_db_component(name: str) -> bool:
+    lowered = (name or "").lower()
+    return "repository" in lowered or "db" in lowered or "context" in lowered
+
+
+def _is_messaging_component(name: str) -> bool:
+    lowered = (name or "").lower()
+    markers = ["bus", "publisher", "producer", "queue", "messaging", "event", "mass"]
+    return any(marker in lowered for marker in markers)
+
+
+def _infer_dependency_action(
+    dependency: str,
+    has_db_activity: bool,
+    has_queue_activity: bool,
+    messages: List[str],
+) -> str:
+    if _is_db_component(dependency) and has_db_activity:
+        return "Read/Write data"
+    if _is_messaging_component(dependency) and has_queue_activity:
+        if messages:
+            return f"Publish {', '.join(messages)}"
+        return "Publish event/message"
+    return "Execute business logic"
+
+
+def _extract_remaining_notes(steps: List[str]) -> List[str]:
+    filtered: List[str] = []
+    for step in steps:
+        if not step:
+            continue
+        lowered = step.lower()
+        if lowered.startswith("publish/send "):
+            continue
+        if lowered.startswith("consumer ") and "reads queue" in lowered:
+            continue
+        if lowered.startswith("consumer ") and "reads db" in lowered:
+            continue
+        if "db" in lowered:
+            continue
+        filtered.append(step)
+    return filtered
 
 
 def _extract_balanced_braces(code: str, start_pos: int) -> str:
