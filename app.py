@@ -109,6 +109,36 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         border: 1px solid #e5e7eb;
     }
+
+    /* Prevent markdown/code snippet overflow in preview */
+    [data-testid="stMarkdownContainer"] pre,
+    [data-testid="stCodeBlock"] pre {
+        max-width: 100%;
+        overflow-x: auto;
+        white-space: pre-wrap !important;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+
+    [data-testid="stMarkdownContainer"] code,
+    [data-testid="stCodeBlock"] code {
+        white-space: pre-wrap !important;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+
+    [data-testid="stMarkdownContainer"] pre code span,
+    [data-testid="stCodeBlock"] pre code span {
+        white-space: pre-wrap !important;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+
+    [data-testid="stMarkdownContainer"] table {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+    }
 </style>
 """, unsafe_allow_html=True)
 
