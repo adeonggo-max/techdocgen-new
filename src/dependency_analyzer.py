@@ -4,6 +4,8 @@ from typing import Dict, List, Any, Set, Optional, Tuple
 from pathlib import Path
 from collections import defaultdict
 import json
+import hashlib
+import re
 
 
 class DependencyAnalyzer:
@@ -12,10 +14,18 @@ class DependencyAnalyzer:
     def __init__(self, config: Dict[str, Any] = None):
         self.config = config or {}
         self.file_index: Dict[str, Dict[str, Any]] = {}  # Maps file paths to file info
-        self.class_index: Dict[str, str] = {}  # Maps class names to file paths
+        self.class_index: Dict[str, Set[str]] = defaultdict(set)  # Maps class names to one/more file paths
         self.package_index: Dict[str, List[str]] = defaultdict(list)  # Maps packages to file paths
         self.dependencies: Dict[str, Set[str]] = defaultdict(set)  # Maps file paths to dependent file paths
         self.external_dependencies: Dict[str, Set[str]] = defaultdict(set)  # External imports
+    
+    def _reset_state(self):
+        """Reset analyzer state before each analysis run."""
+        self.file_index = {}
+        self.class_index = defaultdict(set)
+        self.package_index = defaultdict(list)
+        self.dependencies = defaultdict(set)
+        self.external_dependencies = defaultdict(set)
     
     def analyze_files(self, files: List[Dict[str, Any]], parsers: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -28,6 +38,9 @@ class DependencyAnalyzer:
         Returns:
             Dictionary containing dependency map and analysis results
         """
+        # Ensure previous analysis does not leak into current run.
+        self._reset_state()
+
         # First pass: Index all files, classes, and packages
         self._build_index(files, parsers)
         
@@ -74,6 +87,8 @@ class DependencyAnalyzer:
             parser = parsers[language]
             try:
                 parsed = parser.parse(file_info['content'])
+                package = ''
+                namespace = ''
                 
                 # Index file
                 self.file_index[relative_path] = {
@@ -113,8 +128,8 @@ class DependencyAnalyzer:
                             package or namespace or '', 
                             language
                         )
-                        self.class_index[full_class_name] = relative_path
-                        self.class_index[class_name] = relative_path  # Also index short name
+                        self.class_index[full_class_name].add(relative_path)
+                        self.class_index[class_name].add(relative_path)  # Also index short name
                         self.file_index[relative_path]['classes'].append({
                             'name': class_name,
                             'full_name': full_class_name
@@ -130,8 +145,8 @@ class DependencyAnalyzer:
                             package or namespace or '',
                             language
                         )
-                        self.class_index[full_interface_name] = relative_path
-                        self.class_index[interface_name] = relative_path  # Also index short name
+                        self.class_index[full_interface_name].add(relative_path)
+                        self.class_index[interface_name].add(relative_path)  # Also index short name
                         self.file_index[relative_path]['classes'].append({
                             'name': interface_name,
                             'full_name': full_interface_name
@@ -185,27 +200,66 @@ class DependencyAnalyzer:
                 
                 # Resolve each import
                 for imp in imports:
-                    resolved_files = self._resolve_import(imp, file_path, language)
-                    if resolved_files:
-                        # resolved_files can be a single file path or a list
-                        if isinstance(resolved_files, list):
-                            for resolved in resolved_files:
-                                # Normalize resolved path
-                                normalized_resolved = self._normalize_path(resolved)
-                                if normalized_resolved in self.file_index:
-                                    self.dependencies[file_path].add(normalized_resolved)
-                                else:
-                                    self.external_dependencies[file_path].add(imp)
-                        else:
-                            # Normalize resolved path
-                            normalized_resolved = self._normalize_path(resolved_files)
-                            if normalized_resolved in self.file_index:
-                                self.dependencies[file_path].add(normalized_resolved)
-                            else:
-                                self.external_dependencies[file_path].add(imp)
+                    # C#/VB/F#: don't connect to whole namespace; resolve by symbol usage in source.
+                    if language in ['csharp', 'vbnet', 'fsharp'] and imp in self.package_index:
+                        resolved_files = self._resolve_namespace_usage(imp, file_path, file_info.get('content', ''))
+                    else:
+                        resolved_files = self._resolve_import(imp, file_path, language)
+                    if not resolved_files:
+                        continue
+
+                    # resolved_files can be a single file path or a list
+                    if not isinstance(resolved_files, list):
+                        resolved_files = [resolved_files]
+
+                    found_internal = False
+                    for resolved in resolved_files:
+                        normalized_resolved = self._normalize_path(resolved)
+                        if normalized_resolved in self.file_index and normalized_resolved != file_path:
+                            self.dependencies[file_path].add(normalized_resolved)
+                            found_internal = True
+
+                    if not found_internal:
+                        self.external_dependencies[file_path].add(imp)
             
             except Exception:
                 continue
+
+    def _resolve_namespace_usage(self, namespace: str, source_file: str, source_content: str) -> List[str]:
+        """
+        Resolve namespace import to only classes actually referenced in source content.
+        This avoids false edges like CreateOrder -> DeleteOrder when both share one namespace.
+        """
+        if namespace not in self.package_index:
+            return []
+
+        tokens = set(re.findall(r'\b[A-Za-z_][A-Za-z0-9_]*\b', source_content or ''))
+        # Don't match the class currently being defined in the source file.
+        own_classes = {
+            c.get('name', '')
+            for c in self.file_index.get(source_file, {}).get('classes', [])
+            if isinstance(c, dict)
+        }
+        tokens = tokens - own_classes
+
+        matched: List[str] = []
+        for candidate in self.package_index.get(namespace, []):
+            candidate_norm = self._normalize_path(candidate)
+            if candidate_norm == source_file:
+                continue
+            candidate_classes = self.file_index.get(candidate_norm, {}).get('classes', [])
+            class_names = [c.get('name', '') for c in candidate_classes if isinstance(c, dict)]
+            if any(class_name and class_name in tokens for class_name in class_names):
+                matched.append(candidate_norm)
+
+        # De-duplicate while preserving order.
+        seen = set()
+        unique_matches = []
+        for m in matched:
+            if m not in seen:
+                unique_matches.append(m)
+                seen.add(m)
+        return unique_matches
     
     def _resolve_import(self, import_stmt: str, source_file: str, language: str) -> Optional[Any]:
         """
@@ -229,15 +283,17 @@ class DependencyAnalyzer:
         
         # Try to find by full class name
         if import_stmt in self.class_index:
-            resolved = self.class_index[import_stmt]
-            return self._normalize_path(resolved) if resolved else None
+            resolved = [self._normalize_path(p) for p in self.class_index[import_stmt] if p]
+            if resolved:
+                return resolved if len(resolved) > 1 else resolved[0]
         
         # Try to find by class name (last segment)
         if '.' in import_stmt:
             class_name = import_stmt.split('.')[-1]
             if class_name in self.class_index:
-                resolved = self.class_index[class_name]
-                return self._normalize_path(resolved) if resolved else None
+                resolved = [self._normalize_path(p) for p in self.class_index[class_name] if p]
+                if resolved:
+                    return resolved if len(resolved) > 1 else resolved[0]
         
         # Try to find by package/namespace
         if language == 'java':
@@ -250,18 +306,16 @@ class DependencyAnalyzer:
                     return normalized_files if len(normalized_files) > 1 else normalized_files[0]
         elif language in ['csharp', 'vbnet', 'fsharp']:
             # Check if it's a namespace
+            # Namespace-level resolution is handled in _resolve_namespace_usage.
             if import_stmt in self.package_index:
-                # Return all files in namespace
-                files = self.package_index[import_stmt]
-                if files:
-                    normalized_files = [self._normalize_path(f) for f in files]
-                    return normalized_files if len(normalized_files) > 1 else normalized_files[0]
-            # Avoid prefix matching to reduce false dependencies
+                return None
         
-        # Try partial matching
+        # Conservative fallback: suffix match only (avoid broad substring matching).
         for full_name, file_path in self.class_index.items():
-            if full_name.endswith(import_stmt) or import_stmt in full_name:
-                return self._normalize_path(file_path) if file_path else None
+            if full_name.endswith(f".{import_stmt}") or full_name == import_stmt:
+                resolved = [self._normalize_path(p) for p in file_path if p]
+                if resolved:
+                    return resolved if len(resolved) > 1 else resolved[0]
         
         return None
     
@@ -272,12 +326,24 @@ class DependencyAnalyzer:
         
         # Create nodes
         for file_path, file_info in self.file_index.items():
+            parsed = file_info.get('parsed', {}) or {}
+            methods: List[str] = []
+            for cls in parsed.get('classes', []) or []:
+                class_name = cls.get('name', '')
+                for m in cls.get('methods', []) or []:
+                    method_name = m.get('name', '')
+                    if class_name and method_name:
+                        methods.append(f"{class_name}.{method_name}")
+                    elif method_name:
+                        methods.append(method_name)
+
             node = {
                 'id': file_path,
                 'path': file_path,
                 'language': file_info['language'],
                 'package': file_info.get('package') or file_info.get('namespace', ''),
                 'classes': [cls['name'] for cls in file_info.get('classes', [])],
+                'methods': methods[:20],
                 'dependency_count': len(self.dependencies.get(file_path, set())),
                 'dependent_count': self._count_dependents(file_path)
             }
@@ -301,6 +367,35 @@ class DependencyAnalyzer:
                 for file_path, deps in self.external_dependencies.items()
             }
         }
+
+    def _build_node_display_label(self, file_path: str, include_parent_on_duplicate: bool = False) -> str:
+        """Build readable node label: FileName.ext / Class.Method (or / Class)."""
+        normalized = self._normalize_path(file_path)
+        path_obj = Path(normalized)
+        file_name = path_obj.name or normalized
+        if include_parent_on_duplicate and path_obj.parent and str(path_obj.parent) not in (".", ""):
+            file_name = f"{path_obj.parent.name}/{file_name}"
+
+        file_info = self.file_index.get(normalized, {})
+        classes = file_info.get('classes', []) or []
+        parsed = file_info.get('parsed', {}) or {}
+
+        first_class = classes[0]['name'] if classes and isinstance(classes[0], dict) else ""
+        first_method = ""
+        for cls in parsed.get('classes', []) or []:
+            cls_name = cls.get('name', '')
+            methods = cls.get('methods', []) or []
+            if methods:
+                method_name = methods[0].get('name', '')
+                if method_name:
+                    first_method = f"{cls_name}.{method_name}" if cls_name else method_name
+                    break
+
+        if first_method:
+            return f"{file_name} / {first_method}"
+        if first_class:
+            return f"{file_name} / {first_class}"
+        return file_name
     
     def _count_dependents(self, file_path: str) -> int:
         """Count how many files depend on this file"""
@@ -433,7 +528,8 @@ class DependencyAnalyzer:
             """Sanitize path to valid Mermaid node ID"""
             import re
             # Replace all non-word characters with underscores
-            node_id = re.sub(r'[^\w]', '_', str(path))
+            raw_path = str(path)
+            node_id = re.sub(r'[^\w]', '_', raw_path)
             # Remove consecutive underscores
             node_id = re.sub(r'_+', '_', node_id)
             # Remove leading/trailing underscores
@@ -441,25 +537,44 @@ class DependencyAnalyzer:
             # Ensure it starts with a letter or underscore
             if node_id and not node_id[0].isalpha() and node_id[0] != '_':
                 node_id = '_' + node_id
-            return node_id[:50] if node_id else 'node'
+            digest = hashlib.sha1(raw_path.encode("utf-8")).hexdigest()[:10]
+            base = node_id[:80] if node_id else 'node'
+            return f"{base}_{digest}"
         
         def sanitize_label(text: str) -> str:
             """Sanitize text for Mermaid node labels"""
             label = text.replace('\\', '\\\\').replace('"', '\\"')
             label = label.replace('\n', ' ').replace('\r', ' ')
-            return label[:40] if label else 'file'
+            return label[:120] if label else 'file'
         
         lines = ['graph LR']
+
+        # Detect duplicate file names so labels can include parent folder for clarity.
+        file_name_counts: Dict[str, int] = defaultdict(int)
+        for file_path in self.file_index.keys():
+            file_name_counts[Path(self._normalize_path(file_path)).name] += 1
         
         # Add edges with node labels (nodes are auto-created with labels in Mermaid)
         edges_added = set()
         for source, targets in self.dependencies.items():
             source_id = sanitize_node_id(source)
-            source_label = sanitize_label(Path(source).name)
+            source_name = Path(self._normalize_path(source)).name
+            source_label = sanitize_label(
+                self._build_node_display_label(
+                    source,
+                    include_parent_on_duplicate=file_name_counts.get(source_name, 0) > 1
+                )
+            )
             
             for target in targets:
                 target_id = sanitize_node_id(target)
-                target_label = sanitize_label(Path(target).name)
+                target_name = Path(self._normalize_path(target)).name
+                target_label = sanitize_label(
+                    self._build_node_display_label(
+                        target,
+                        include_parent_on_duplicate=file_name_counts.get(target_name, 0) > 1
+                    )
+                )
                 
                 # Avoid duplicate edges
                 edge_key = f"{source_id}->{target_id}"
@@ -478,15 +593,31 @@ class DependencyAnalyzer:
         edges_added = set()
         edge_count = 0
 
+        file_name_counts: Dict[str, int] = defaultdict(int)
+        for file_path in self.file_index.keys():
+            file_name_counts[Path(self._normalize_path(file_path)).name] += 1
+
         for source, targets in self.dependencies.items():
             source_id = self._sanitize_node_id(source)
-            source_label = self._sanitize_label(Path(source).name)
+            source_name = Path(self._normalize_path(source)).name
+            source_label = self._sanitize_label(
+                self._build_node_display_label(
+                    source,
+                    include_parent_on_duplicate=file_name_counts.get(source_name, 0) > 1
+                )
+            )
 
             for target in targets:
                 if edge_count >= max_edges:
                     break
                 target_id = self._sanitize_node_id(target)
-                target_label = self._sanitize_label(Path(target).name)
+                target_name = Path(self._normalize_path(target)).name
+                target_label = self._sanitize_label(
+                    self._build_node_display_label(
+                        target,
+                        include_parent_on_duplicate=file_name_counts.get(target_name, 0) > 1
+                    )
+                )
                 edge_key = f"{source_id}->{target_id}"
                 if edge_key in edges_added:
                     continue
@@ -502,18 +633,21 @@ class DependencyAnalyzer:
     def _sanitize_node_id(self, path: str) -> str:
         """Sanitize path to valid Mermaid node ID"""
         import re
-        node_id = re.sub(r"[^\w]", "_", str(path))
+        raw_path = str(path)
+        node_id = re.sub(r"[^\w]", "_", raw_path)
         node_id = re.sub(r"_+", "_", node_id)
         node_id = node_id.strip("_")
         if node_id and not node_id[0].isalpha() and node_id[0] != "_":
             node_id = "_" + node_id
-        return node_id[:50] if node_id else "node"
+        digest = hashlib.sha1(raw_path.encode("utf-8")).hexdigest()[:10]
+        base = node_id[:80] if node_id else "node"
+        return f"{base}_{digest}"
 
     def _sanitize_label(self, text: str) -> str:
         """Sanitize text for Mermaid node labels"""
         label = text.replace("\\", "\\\\").replace('"', '\\"')
         label = label.replace("\n", " ").replace("\r", " ")
-        return label[:40] if label else "file"
+        return label[:120] if label else "file"
     
     def generate_markdown_report(self) -> str:
         """Generate a markdown report of the dependency analysis"""

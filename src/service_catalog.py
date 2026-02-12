@@ -159,11 +159,13 @@ def _build_endpoint_flows(
         steps, messages = _infer_endpoint_steps(body)
         consumers = []
         for message in messages:
-            consumers.extend(consumer_map.get(message, []))
+            consumers.extend(consumer_map.get(_normalize_type_name(message), []))
         for cons in consumers:
             steps.append(f"Consumer {cons['consumer']} reads queue")
             if cons.get("reads_db"):
                 steps.append(f"Consumer {cons['consumer']} reads DB")
+            for evt in cons.get("publishes", []) or []:
+                steps.append(f"Consumer {cons['consumer']} publishes {evt}")
         flows.append(
             {
                 "controller": endpoint.get("controller"),
@@ -250,6 +252,7 @@ def _render_endpoint_sequence(
 ) -> str:
     messages = _extract_message_names(steps)
     consumers = _extract_consumers(steps)
+    consumer_publishes = _extract_consumer_publishes(steps)
     has_db_activity = _has_db_activity(steps)
     has_queue_activity = bool(messages) or any("queue" in step.lower() for step in steps)
     remaining_steps = _extract_remaining_notes(steps)
@@ -308,6 +311,12 @@ def _render_endpoint_sequence(
             if _consumer_reads_db(consumer, steps):
                 lines.append(f"  {_safe_id(consumer)}->>Database: Read/Write data")
                 lines.append(f"  Database-->>{_safe_id(consumer)}: Data/ACK")
+            emitted = consumer_publishes.get(consumer, [])
+            if emitted:
+                lines.append(
+                    f"  {_safe_id(consumer)}->>MessageBroker: Publish {', '.join(emitted)}"
+                )
+                lines.append(f"  MessageBroker-->>{_safe_id(consumer)}: Ack")
             lines.append(f"  {_safe_id(consumer)}-->>MessageBroker: Ack")
             lines.append(f"  deactivate {_safe_id(consumer)}")
 
@@ -329,6 +338,7 @@ def _infer_endpoint_steps(body: str) -> tuple[List[str], List[str]]:
     messages: List[str] = []
     if not body:
         return steps, messages
+    body = _strip_comments(body)
     var_types: Dict[str, str] = {}
     for match in re.finditer(r"\bvar\s+(\w+)\s*=\s*new\s+([\w\.]+)\s*\(", body):
         var_types[match.group(1)] = match.group(2)
@@ -370,12 +380,58 @@ def _build_consumer_message_map(files: List[Dict[str, Any]]) -> Dict[str, List[D
         reads_db = "DbContext" in content or "DbSet" in content or "SaveChanges" in content
         for match in consumer_pattern.finditer(content):
             consumer = match.group(1)
-            message = match.group(2)
+            message = _normalize_type_name(match.group(2))
+            publishes = _extract_published_messages(content)
             consumer_map.setdefault(message, [])
             consumer_map[message].append(
-                {"consumer": consumer, "reads_db": reads_db}
+                {"consumer": consumer, "reads_db": reads_db, "publishes": publishes}
             )
     return consumer_map
+
+
+def _normalize_type_name(type_name: str) -> str:
+    if not type_name:
+        return ""
+    cleaned = re.sub(r"<[^>]+>", "", type_name.strip())
+    return cleaned.split(".")[-1]
+
+
+def _extract_published_messages(body: str) -> List[str]:
+    messages: List[str] = []
+    if not body:
+        return messages
+    body = _strip_comments(body)
+    var_types: Dict[str, str] = {}
+    for match in re.finditer(r"\bvar\s+(\w+)\s*=\s*new\s+([\w\.]+)\s*\(", body):
+        var_types[match.group(1)] = _normalize_type_name(match.group(2))
+    for match in re.finditer(r"\b([\w\.]+)\s+(\w+)\s*=\s*new\s+([\w\.]+)\s*\(", body):
+        declared_type = _normalize_type_name(match.group(1))
+        constructed_type = _normalize_type_name(match.group(3))
+        resolved_type = constructed_type if declared_type.lower() == "var" else declared_type
+        var_types[match.group(2)] = resolved_type
+    matches = re.findall(
+        r"\.Publish<\s*([\w\.]+)\s*>|\bPublish\(\s*new\s+([\w\.]+)",
+        body,
+        re.IGNORECASE,
+    )
+    for match in matches:
+        name = _normalize_type_name(match[0] or match[1])
+        if name and name not in messages:
+            messages.append(name)
+    for match in re.finditer(r"\bPublish\(\s*(\w+)\s*\)", body, re.IGNORECASE):
+        var_name = match.group(1)
+        name = _normalize_type_name(var_types.get(var_name, ""))
+        if name and name not in messages:
+            messages.append(name)
+    return messages
+
+
+def _strip_comments(code: str) -> str:
+    if not code:
+        return ""
+    no_block = re.sub(r"/\*.*?\*/", "", code, flags=re.DOTALL)
+    no_line = re.sub(r"//.*?$", "", no_block, flags=re.MULTILINE)
+    return no_line
 
 
 def _extract_http_verbs(attrs: str) -> List[str]:
@@ -468,7 +524,7 @@ def _extract_message_names(steps: List[str]) -> List[str]:
         match = re.search(r"Publish/Send\s+([\w\.]+)\s+to queue", step or "", re.IGNORECASE)
         if not match:
             continue
-        name = match.group(1)
+        name = _normalize_type_name(match.group(1))
         if name and name not in names:
             names.append(name)
     return names
@@ -484,6 +540,26 @@ def _extract_consumers(steps: List[str]) -> List[str]:
         if consumer and consumer not in consumers:
             consumers.append(consumer)
     return consumers
+
+
+def _extract_consumer_publishes(steps: List[str]) -> Dict[str, List[str]]:
+    publishes: Dict[str, List[str]] = {}
+    for step in steps:
+        match = re.search(
+            r"Consumer\s+([\w\.]+)\s+publishes\s+([\w\.]+)",
+            step or "",
+            re.IGNORECASE,
+        )
+        if not match:
+            continue
+        consumer = match.group(1)
+        message = _normalize_type_name(match.group(2))
+        if not consumer or not message:
+            continue
+        publishes.setdefault(consumer, [])
+        if message not in publishes[consumer]:
+            publishes[consumer].append(message)
+    return publishes
 
 
 def _consumer_reads_db(consumer: str, steps: List[str]) -> bool:
